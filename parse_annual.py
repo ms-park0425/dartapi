@@ -1385,9 +1385,27 @@ def extract_company_data(corp_name, year="2025"):
     if 24 in result and all(c in result for c in oci_parts_cols):
         result[31] = result[24] - sum(result[c] for c in oci_parts_cols)
 
+    # Col45: 영업손익 체크 = Col41+Col42-Col43
+    if all(c in result for c in [41, 42, 43]):
+        result[45] = result[41] + result[42] - result[43]
+
     # Col46: 투자손익 체크 = Col36+Col37+Col38-Col39+Col40-Col35
     if all(c in result for c in [35, 36, 37, 38, 39, 40]):
         result[46] = result[36] + result[37] + result[38] - result[39] + result[40] - result[35]
+
+    # Col47: 보험투자손익 체크 = Col32+Col35-Col41
+    if all(c in result for c in [32, 35, 41]):
+        result[47] = result[32] + result[35] - result[41]
+
+    # Col64: OCI 체크 = Col63-Col55-SUM(Col56~62)
+    oci_detail = [result.get(c, 0) for c in range(56, 63)]
+    if 63 in result and 55 in result and all(c in result for c in range(56, 62)):
+        result[64] = result[63] - result[55] - sum(oci_detail)
+
+    # Col89: CSM 합계 체크 = Col88-SUM(Col83~87)
+    csm_detail = [result.get(c, 0) for c in range(83, 88)]
+    if 88 in result and all(c in result for c in range(83, 88)):
+        result[89] = result[88] - sum(csm_detail)
 
     # Col82: CSM 증감 = Col80+Col76-Col77+Col78+Col79-Col75
     if all(c in result for c in [75, 76, 77, 78, 79, 80]):
