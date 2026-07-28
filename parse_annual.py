@@ -588,7 +588,8 @@ def parse_csm_movement(xbrl_path, target_year="2025"):
         "IncreaseDecreaseThroughEffectsOfContractsInitiallyRecognisedInPeriodInsuranceContractsLiabilityAsset": "new_csm",
         # 삼성생명 패턴
         "IncreaseDecreaseThroughRecognitionOfContractualServiceMarginInProfitOrLossToReflectTransferOfServicesInsuranceContractsLiabilityAsset": "csm_amortization",
-        # IncreaseDecreaseThroughInsuranceFinanceIncomeOrExpenses...는 InsuranceFinanceIncomeExpenses...와 중복이므로 제외
+        # 이자부리 대체 태그 (한화/교보/현대해상 등)
+        "IncreaseDecreaseThroughInsuranceFinanceIncomeOrExpensesInsuranceContractsLiabilityAsset": "csm_finance",
         "IncreaseDecreaseThroughEffectsOfContractsAcquiredInPeriodInsuranceContractsLiabilityAsset": "new_csm",
     }
     component_keys = {
@@ -733,10 +734,15 @@ def parse_csm_movement(xbrl_path, target_year="2025"):
             v = float(elem.text.strip())
         except ValueError:
             continue
+        # 같은 context에서 같은 comp_key는 한 번만 합산
+        ctx_comp_pair = (ctx_ref, comp_key)
+        if ctx_comp_pair in seen: continue
         if tag in AMORT_TAGS or tag in NEW_CSM_TAGS:
             if ctx_ref in min_ctxs:
+                seen.add(ctx_comp_pair)
                 comp_values[comp_key].append((ndim, v))
         else:
+            seen.add(ctx_comp_pair)
             comp_values[comp_key].append((ndim, v))
 
     # 각 comp_key에 대해 합산 전략:
@@ -792,8 +798,15 @@ def parse_csm_movement(xbrl_path, target_year="2025"):
                 else:
                     non_dup = min_vals
                 sums[comp_key] = sum(non_dup)
+        elif comp_key == "csm_finance":
+            # 이자부리: 최소 ndim에서만 합산 (여러 ndim에 같은 값이 중복될 수 있음)
+            if vals:
+                min_nd = min(nd for nd, _ in vals)
+                for nd, v in vals:
+                    if nd == min_nd:
+                        sums[comp_key] += v
         else:
-            # 이자부리 등: 단순 합산 (소액들의 합이 정답)
+            # 나머지: 단순 합산
             for _, v in vals:
                 sums[comp_key] += v
     return sums
