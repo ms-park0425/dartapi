@@ -1377,8 +1377,20 @@ def extract_company_data(corp_name, year="2025"):
     for (col, comp), v in actuarial.items():
         result[col] = v / 1e6
 
-    # Col153~157 = Col146~150 의 반대 부호 (CSM에 반영)
-    # 이미 actuarial에서 직접 CSM 값이 나오므로 별도 처리 불필요
+    # 계산값 (다른 컬럼 값들의 조합)
+    # Col31: OCI 체크 = Col24 - (Col25+Col26+Col27+Col28+Col29+Col30)
+    # OCI 세부항목이 모두 있을 때만 계산 (없으면 정확한 값 계산 불가)
+    oci_parts_cols = [25, 26, 27, 28, 29, 30]
+    if 24 in result and all(c in result for c in oci_parts_cols):
+        result[31] = result[24] - sum(result[c] for c in oci_parts_cols)
+
+    # Col46: 투자손익 체크 = Col36+Col37+Col38-Col39+Col40-Col35
+    if all(c in result for c in [35, 36, 37, 38, 39, 40]):
+        result[46] = result[36] + result[37] + result[38] - result[39] + result[40] - result[35]
+
+    # Col82: CSM 증감 = Col80+Col76-Col77+Col78+Col79-Col75
+    if all(c in result for c in [75, 76, 77, 78, 79, 80]):
+        result[82] = result[80] + result[76] - result[77] + result[78] + result[79] - result[75]
 
     return result
 
@@ -1418,6 +1430,8 @@ def main():
         data = extract_company_data(name, "2025")
         if data:
             key = f"2512{short}"
+            # Col2: 기간코드
+            data[2] = 2512
             # K-ICS 데이터 추가
             if short in kics_data:
                 for col, val in kics_data[short].items():
