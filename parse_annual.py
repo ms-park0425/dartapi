@@ -1203,14 +1203,12 @@ def parse_surrender_reserve(xbrl_path, target_year="2025"):
             tag = elem.tag.split("}")[-1] if "}" in elem.tag else elem.tag
             try:
                 v = float(elem.text.strip())
-                if v <= 0:
-                    continue
                 if has_reserve_axis and "LoanLossReserveBalance" in tag:
-                    best_a = v
+                    if v > 0: best_a = v
                 elif is_1dim_instant and tag == "SurrenderValueReserve":
-                    best_b = v  # 가장 큰 값 선택 (당기말)
+                    if v > 0: best_b = v  # 양수만
                 elif is_1dim_instant and tag == "SurrenderValueReserveToBeAdded":
-                    best_b_added = v
+                    best_b_added = v  # 음수(차감)도 허용
                 elif has_reserve_axis and ("SurrenderValueReserve" in tag or "LoanLossReserve" in tag):
                     if best_a is None:
                         best_a = v
