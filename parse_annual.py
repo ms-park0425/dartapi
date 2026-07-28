@@ -274,10 +274,12 @@ def parse_actuarial_sensitivity(xbrl_path, target_year="2025"):
         comp = dims.get("InsuranceContractsByComponentsAxis", "")
         disagg = dims.get("DisaggregationOfInsuranceContractsAxis", "")
 
-        # 패턴A: 2-dim, DisaggregationAxis=BEL/CSM (삼성생명)
+        # 패턴A: 2-dim, DisaggregationAxis=BEL/RA/CSM (삼성생명)
         if len(members) == 2 and not comp:
             if bel_member in disagg:
                 alt_ctxs[ctx_id] = "BEL"
+            elif "RiskAdjustmentForNonfinancialRiskMember" in disagg:
+                alt_ctxs[ctx_id] = "RA"
             elif any(m in disagg for m in csm_members):
                 alt_ctxs[ctx_id] = "CSM"
         # 패턴B: 5~6-dim, InsuranceContractsIssuedMember + BEL/CSM component (현대해상/DB손보/한화)
@@ -328,13 +330,14 @@ def parse_actuarial_sensitivity(xbrl_path, target_year="2025"):
             continue
         if v == 0:
             continue
-        # 키워드 매핑
-        for col, kwords in SENS_KEYWORDS.get(comp_type, {}).items():
+        # 키워드 매핑 (BEL과 RA는 같은 col에 합산)
+        effective_comp = "BEL" if comp_type in ("BEL", "RA") else comp_type
+        for col, kwords in SENS_KEYWORDS.get(effective_comp, {}).items():
             if any(k.lower() in tag.lower() for k in kwords):
                 pair = (ctx_ref, col)
                 if pair not in keyword_seen:
                     keyword_seen.add(pair)
-                    result[(col, comp_type)] = result.get((col, comp_type), 0.0) + v
+                    result[(col, effective_comp)] = result.get((col, effective_comp), 0.0) + v
                 break
     return result
 
