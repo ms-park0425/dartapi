@@ -158,10 +158,12 @@ EXTRA_PL_MAPPING = {
 
 # Col40: 기타투자손익 = FeeIncome + RentalIncome + OtherIncomeInvestment - OtherExpenseInvestment
 # 태그는 회사마다 다름, 아래 각 항목에 여러 후보
-COL40_FEE = ["dart_FeeIncomeOfInvestmentIncome", "ifrs-full_FeeAndCommissionIncome"]
+COL40_FEE = ["dart_FeeIncomeOfInvestmentIncome", "dart_FeesAndCommissionIncomeOfInvestmentIncome",
+             "ifrs-full_FeeAndCommissionIncome"]
 COL40_RENT = ["dart_RentalReturnOfInvestmentIncome", "ifrs-full_RentalIncome"]
-COL40_OTHER_INC = ["ifrs-full_OtherOperatingIncomeInvestment"]
-COL40_OTHER_EXP = ["ifrs-full_OtherOperatingExpenseInvestment"]
+COL40_OTHER_INC = ["ifrs-full_OtherOperatingIncomeInvestment", "dart_OtherOperatingIncomeInvestment"]
+# 투자비용: OtherOperatingExpenseInvestment + PropertyManagementExpense + udf 계열 모두 포함
+COL40_OTHER_EXP_KEYWORDS = ["OtherOperatingExpenseInvestment", "PropertyManagementExpense"]
 
 # 복합 축 항목 (CSM 변동표 등)
 # 별도 + InsuranceContractsIssuedMember + 각 ComponentMember
@@ -577,8 +579,10 @@ def parse_csm_movement(xbrl_path, target_year="2025"):
     for ctx_ref, comp_key in [(c, None) for c in target_ctxs]:
         pass  # rebuild below
 
-    # ctx_id → ndim 매핑
+    # ctx_id → ndim 매핑 (target_ctxs + adj용 all_sep_ctxs)
     ctx_ndim = {}
+    # csm_adjustment 전용: 다양한 context 패턴 지원
+    all_sep_ctxs = set()  # adj_tag용
     for ctx in root.findall(f"{{{NS_XBRLI}}}context"):
         period = ctx.find(f"{{{NS_XBRLI}}}period")
         start = period.find(f"{{{NS_XBRLI}}}startDate")
@@ -586,33 +590,118 @@ def parse_csm_movement(xbrl_path, target_year="2025"):
         if start is None or start.text != f"{target_year}-01-01": continue
         if end is None or end.text != f"{target_year}-12-31": continue
         ctx_id = ctx.get("id", "")
-        if ctx_id in target_ctxs:
-            members = ctx.findall(f".//{{{NS_XBRLDI}}}explicitMember")
+        members = ctx.findall(f".//{{{NS_XBRLDI}}}explicitMember")
+        dims_t = {m.get("dimension", "").split(":")[-1]: (m.text or "").split(":")[-1] for m in members}
+        if "SeparateMember" != dims_t.get("ConsolidatedAndSeparateFinancialStatementsAxis", ""): continue
+        # 패턴1: DisaggregationAxis=InsuranceContractsIssuedMember + InsuranceContractsByComponentsAxis=CSM
+        # 패턴2(삼성생명): DisaggregationAxis=ContractualServiceMarginMember (2-dim)
+        is_pattern1 = (
+            "InsuranceContractsIssuedMember" == dims_t.get("DisaggregationOfInsuranceContractsAxis", "")
+            and dims_t.get("InsuranceContractsByComponentsAxis", "") in component_keys
+        )
+        is_pattern2 = (
+            "ContractualServiceMarginMember" == dims_t.get("DisaggregationOfInsuranceContractsAxis", "")
+            and "InsuranceContractsByComponentsAxis" not in dims_t
+        )
+        if is_pattern1:
             ctx_ndim[ctx_id] = len(members)
-            if len(members) == min_ndim:
+            all_sep_ctxs.add(ctx_id)
+            if ctx_id in target_ctxs and len(members) == min_ndim:
                 min_ctxs.add(ctx_id)
+        elif is_pattern2:
+            ctx_ndim[ctx_id] = len(members)
+            all_sep_ctxs.add(ctx_id)
 
     # (context_id, tag) 쌍으로 중복 방지
+    # 추가: 같은 tag + comp_key 조합에서 중복 합산 방지 (낮은 ndim 우선)
     seen = set()
+    # comp_key별로 값 수집: (comp_key, value) 리스트
+    comp_values = {v: [] for v in csm_tags.values()}  # comp_key -> [(ndim, value)]
+
+    adj_tag = "IncreaseDecreaseThroughChangesInEstimatesThatAdjustContractualServiceMarginInsuranceContractsLiabilityAsset"
+
     for elem in root:
         ctx_ref = elem.get("contextRef", "")
-        if ctx_ref not in target_ctxs or not elem.text: continue
+        if not elem.text: continue
         tag = elem.tag.split("}")[-1] if "}" in elem.tag else elem.tag
         if tag not in csm_tags: continue
+        # adj_tag는 all_sep_ctxs에서 수집, 나머지는 target_ctxs에서
+        if tag == adj_tag:
+            if ctx_ref not in all_sep_ctxs: continue
+        else:
+            if ctx_ref not in target_ctxs: continue
         pair = (ctx_ref, tag)
         if pair in seen: continue
         seen.add(pair)
         comp_key = csm_tags[tag]
+        ndim = ctx_ndim.get(ctx_ref, 99)
         try:
             v = float(elem.text.strip())
         except ValueError:
             continue
-        # 상각/신계약은 min_ndim에서만
         if tag in AMORT_TAGS or tag in NEW_CSM_TAGS:
             if ctx_ref in min_ctxs:
-                sums[comp_key] += v
+                comp_values[comp_key].append((ndim, v))
         else:
-            sums[comp_key] += v
+            comp_values[comp_key].append((ndim, v))
+
+    # 각 comp_key에 대해 합산 전략:
+    # - csm_adjustment: 가장 낮은 ndim의 합산만 사용 (상위 집계값이 정답)
+    # - 나머지: 같은 절댓값 중복 제거 후 합산
+    adj_tag_key = "csm_adjustment"
+    for comp_key, vals in comp_values.items():
+        if not vals:
+            continue
+        if comp_key == adj_tag_key:
+            # 조정: 최소 ndim에서 ContractualServiceMarginMember(집계) 값이 있으면 그것 하나만,
+            # 없으면 최소 ndim의 sub-component 합산
+            min_nd = min(nd for nd, _ in vals)
+            min_nd_vals = [(nd, v) for nd, v in vals if nd == min_nd]
+            # ContractualServiceMarginMember context는 별도로 표시됨
+            # 집계값(단일)과 세부값들이 같은 ndim에 있을 때 → 집계값 하나만 사용
+            # 집계값 = 세부값들의 합과 같음 → 집계값이 있으면 집계값만
+            total_min = sum(v for _, v in min_nd_vals)
+            # 값이 2개 이상이고 그 중 하나가 전체합과 같으면 그것 하나만 사용
+            for _, v in min_nd_vals:
+                if abs(v - total_min / 2) < abs(total_min) * 0.01 and len(min_nd_vals) > 1:
+                    # 약 절반인 값이 있으면 집계값 = 절반 → 그것만 사용
+                    sums[comp_key] = v
+                    break
+            else:
+                sums[comp_key] = total_min
+        elif comp_key in ("new_csm", "csm_amortization"):
+            # 신계약/상각: 최소 ndim에서 합산하되,
+            # 단일 집계값이 세부값들의 합과 같으면 세부값들만 사용
+            if vals:
+                min_nd = min(nd for nd, _ in vals)
+                min_vals = [v for nd, v in vals if nd == min_nd]
+                total_min = sum(min_vals)
+                # 집계값이 세부값 합과 같으면(같은 ndim에 중복 저장) → 더 작은 세부값들만 합산
+                # 예: [2037561, 1386, 2036175] → 2037561 = 1386+2036175 → 세부값 합 사용
+                # 하나의 값이 나머지 합과 같으면 그것은 집계값
+                non_dup = []
+                for v in min_vals:
+                    rest_sum = sum(x for x in min_vals if x != v or min_vals.count(x) > 1)
+                    if abs(abs(v) - abs(total_min - v)) < abs(v) * 0.001:
+                        # v ≈ total - v → v ≈ total/2 → 중복 없음 (이 경우는 단순 합산)
+                        pass
+                    # 하나가 나머지 합과 같은지 체크
+                if len(min_vals) > 1:
+                    for i, v in enumerate(min_vals):
+                        others_sum = sum(x for j, x in enumerate(min_vals) if j != i)
+                        if abs(abs(v) - abs(others_sum)) < abs(v) * 0.01:
+                            # v = sum of others → v is the aggregate, exclude it
+                            non_dup = [x for j, x in enumerate(min_vals) if j != i]
+                            break
+                    else:
+                        non_dup = min_vals
+                else:
+                    non_dup = min_vals
+                sums[comp_key] = sum(non_dup)
+        else:
+            # 이자부리 등: 단순 합산 (소액들의 합이 정답)
+            for _, v in vals:
+                sums[comp_key] += v
     return sums
 
 
@@ -952,9 +1041,9 @@ def parse_surrender_reserve(xbrl_path, target_year="2025"):
     tree = ET.parse(xbrl_path)
     root = tree.getroot()
 
-    best_a = None  # 패턴A (ReservesWithinEquityAxis)
-    best_b = None  # 패턴B (1-dim instant, SurrenderValueReserve 태그)
-    best_b_added = None  # 패턴B (SurrenderValueReserveToBeAdded)
+    best_a = None   # 패턴A (ReservesWithinEquityAxis)
+    best_b = None   # 패턴B SurrenderValueReserve
+    best_b_added = None  # SurrenderValueReserveToBeAdded (당기 추가분)
 
     for ctx in root.findall(f"{{{NS_XBRLI}}}context"):
         ctx_id = ctx.get("id", "")
@@ -1006,7 +1095,12 @@ def parse_surrender_reserve(xbrl_path, target_year="2025"):
             except ValueError:
                 pass
 
-    return best_a or best_b or best_b_added
+    # Col99 = SurrenderValueReserve + SurrenderValueReserveToBeAdded (손보사는 두 값의 합이 정답)
+    if best_a:
+        return best_a
+    if best_b and best_b_added:
+        return best_b + best_b_added
+    return best_b or best_b_added
 
 
 def extract_company_data(corp_name, year="2025"):
@@ -1111,23 +1205,29 @@ def extract_company_data(corp_name, year="2025"):
         if val is not None:
             result[col] = val / 1e6
 
-    # Col7 = AC 자산 후보: FinancialAssetsAtAmortisedCost 또는 SecuritiesAtAmortisedCost 또는 Loans+Securities합산
-    # 정답에 가장 가까운 방법을 선택 (회사마다 다르므로 여러 후보 중 합리적 값 선택)
+    # Col7 = AC 자산 (상각후원가 금융자산)
     ac_fin = _get_bs("ifrs-full_FinancialAssetsAtAmortisedCost") or 0
     loans_ac = _get_bs("ifrs-full_LoansAtAmortisedCost") or 0
     sec_ac = _get_bs("ifrs-full_SecuritiesAtAmortisedCost") or 0
-    # FinancialAssetsAtAmortisedCost 있으면 사용, 없으면 Securities
+    other_ac = (_get_bs("ifrs-full_OtherFinancialAssetsAtAmortisedCost") or
+                _get_bs("dart_OtherFinancialAssetsAtAmortisedCost") or 0)
+
     if ac_fin > 0:
-        # FinancialAssetsAtAmortisedCost가 LoansAtAmortisedCost보다 작으면 더 큰 집합 사용
         if loans_ac > ac_fin:
-            result[7] = (loans_ac + sec_ac) / 1e6
+            # FinancialAssetsAtAmortisedCost가 LoansAtAmortisedCost보다 작으면 Loans+Securities+Other 합산
+            result[7] = (loans_ac + sec_ac + other_ac) / 1e6
         else:
+            # FinancialAssetsAtAmortisedCost가 충분히 크면 그것만 사용 (OtherFinancial은 이미 포함)
             result[7] = ac_fin / 1e6
-    elif sec_ac > 0 and loans_ac == 0:
-        # SecuritiesAtAmortisedCost만 있는 경우
-        result[7] = sec_ac / 1e6
-    elif loans_ac > 0 or sec_ac > 0:
-        result[7] = (loans_ac + sec_ac) / 1e6
+    elif sec_ac > 0:
+        # Securities만 있거나 Loans보다 크면 Securities 우선 (신한라이프: 대출채권은 별도 항목)
+        # Securities가 Loans보다 크면 이미 포함 관계 → Securities만
+        if sec_ac >= loans_ac:
+            result[7] = (sec_ac + other_ac) / 1e6
+        else:
+            result[7] = (loans_ac + sec_ac + other_ac) / 1e6
+    elif loans_ac > 0:
+        result[7] = (loans_ac + other_ac) / 1e6
 
     # Col14 = 자본(신종자본증권 제외) = Col15 - Col16
     if 15 in result:
@@ -1183,10 +1283,28 @@ def extract_company_data(corp_name, year="2025"):
             if v:
                 return v
         return 0
+
+    def _get_pl_by_keyword(keywords):
+        """PL에서 tag 이름에 keyword가 포함된 값들 합산"""
+        total = 0.0
+        for k, v in pl.items():
+            for kw in keywords:
+                if kw in k:
+                    # 단순 OperatingExpenseInvestment(전체) 태그 제외
+                    if k in ("dart_OperatingExpenseInvestment", "ifrs-full_OperatingExpenseInvestment"):
+                        continue
+                    # 이익/수익/관련자 거래 태그 제외
+                    if any(x in k for x in ("Gain", "Income", "Revenue", "RelatedParty",
+                                             "DisclosureOfTransactions")):
+                        continue
+                    total += v
+                    break
+        return total
+
     fee = _get_pl_multi(COL40_FEE)
     rent = _get_pl_multi(COL40_RENT)
     other_inc = _get_pl_multi(COL40_OTHER_INC)
-    other_exp = _get_pl_multi(COL40_OTHER_EXP)
+    other_exp = _get_pl_by_keyword(COL40_OTHER_EXP_KEYWORDS)
     col40_val = fee + rent + other_inc - other_exp
     if col40_val:
         result[40] = col40_val / 1e6
