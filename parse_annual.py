@@ -51,6 +51,7 @@ BS_MAPPING = {
     # Col7: 상각후원가 자산 - LoansAtAmortisedCost + SecuritiesAtAmortisedCost 합산도 후보
     7: "ifrs-full_FinancialAssetsAtAmortisedCost",
     8: "ifrs-full_InvestmentsInSubsidiariesJointVenturesAndAssociates",
+    # fallback in extract_company_data: InvestmentAccountedForUsingEquityMethod
     12: "ifrs-full_Liabilities",
     13: "ifrs-full_InsuranceContractsIssuedThatAreLiabilities",
     15: "ifrs-full_Equity",  # 총자본
@@ -1256,6 +1257,12 @@ def extract_company_data(corp_name, year="2025"):
         v = bs.get("dart_SecuritiesAtFairValueThroughOtherComprehensiveIncome")
         if v is not None:
             result[6] = v / 1e6
+
+    # Col8 추가 fallback (InvestmentAccountedForUsingEquityMethod - 신한라이프 패턴)
+    if 8 not in result:
+        v = bs.get("ifrs-full_InvestmentAccountedForUsingEquityMethod")
+        if v is not None:
+            result[8] = v / 1e6
 
     # PL 매핑
     for col, account_id in PL_MAPPING.items():
