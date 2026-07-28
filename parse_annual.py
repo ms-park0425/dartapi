@@ -1505,7 +1505,9 @@ def extract_company_data(corp_name, year="2025"):
 
 
 def load_kics_data(csv_path="data/kics_2512.csv"):
-    """K-ICS CSV 로드: {company_short: {비율, 가용, 요구}}"""
+    """K-ICS CSV 로드: {company_short: {col: value}}
+    Col92~94: 당기(2026.03 기준), Col95~97: 전기(2025.12 기준)
+    """
     kics = {}
     if not os.path.exists(csv_path):
         return kics
@@ -1514,11 +1516,14 @@ def load_kics_data(csv_path="data/kics_2512.csv"):
         for row in reader:
             short = row.get("회사", "")
             try:
-                kics[short] = {
-                    95: float(row.get("킥스비율", 0)),  # 그대로 사용
-                    96: float(row.get("가용자본", 0)),
-                    97: float(row.get("요구자본", 0)),
-                }
+                d = {}
+                # 전기 K-ICS (Col95~97) - 2512말 기준
+                if row.get("킥스비율"): d[95] = float(row["킥스비율"]) / 100  # % → 소수
+                if row.get("가용자본"): d[96] = float(row["가용자본"])
+                if row.get("요구자본"): d[97] = float(row["요구자본"])
+                # Col92~94는 회사마다 다른 기준이라 MISS로 남김
+                if d:
+                    kics[short] = d
             except (ValueError, TypeError):
                 pass
     return kics
