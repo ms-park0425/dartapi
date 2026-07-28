@@ -127,7 +127,7 @@ OCI_ACCUM_MAPPING = {
     25: ["FinancialAssets", "GainsAndLossesOnFinancialAssets", "GainsAndLossesFromInvestments"],  # FVOCI 관련 합산
     26: ["InsuranceFinanceIncomeExpenses", "InsuranceContract"],
     27: ["ReinsuranceFinance", "ReinsuranceContract"],
-    28: ["CashFlowHedges", "CashFlow", "Hedging"],
+    28: ["CashFlowHedges", "CashFlow", "Hedging", "ExchangeDifferences"],
     29: ["Revaluation"],          # 전기말 사용
     30: ["RemeasurementsOfDefinedBenefit", "DefinedBenefit"],
 }
@@ -163,7 +163,10 @@ COL40_FEE = ["dart_FeeIncomeOfInvestmentIncome", "dart_FeesAndCommissionIncomeOf
 COL40_RENT = ["dart_RentalReturnOfInvestmentIncome", "ifrs-full_RentalIncome"]
 COL40_OTHER_INC = ["ifrs-full_OtherOperatingIncomeInvestment", "dart_OtherOperatingIncomeInvestment"]
 # 투자비용: OtherOperatingExpenseInvestment + PropertyManagementExpense + udf 계열 모두 포함
+# udf_ + OfOperatingExpenseInvestment는 _get_pl_by_keyword가 아닌 별도 처리
 COL40_OTHER_EXP_KEYWORDS = ["OtherOperatingExpenseInvestment", "PropertyManagementExpense"]
+# DB손보 패턴: udf_IS_ + OfOperatingExpenseInvestment (당해연도 신규 정의)
+COL40_UDF_EXP_PREFIX = "OfOperatingExpenseInvestment"
 
 # 복합 축 항목 (CSM 변동표 등)
 # 별도 + InsuranceContractsIssuedMember + 각 ComponentMember
@@ -446,7 +449,8 @@ def parse_oci_accumulated(xbrl_path, target_year="2025"):
             if not any(kw in oci_member for kw in ("GainsAndLossesOnFinancialAssets", "InsuranceFinance",
                                                      "ReinsuranceFinance", "CashFlowHedges",
                                                      "Revaluation", "RemeasurementsOfDefinedBenefit",
-                                                     "ReserveOfGainsAndLosses")):
+                                                     "ReserveOfGainsAndLosses", "ExchangeDifferences",
+                                                     "Hedging")):
                 continue
             ctx_id = ctx.get("id", "")
             # ComponentsOfEquityAxis가 있는 context의 값을 우선
@@ -1297,8 +1301,11 @@ def extract_company_data(corp_name, year="2025"):
                     if any(x in k for x in ("Gain", "Income", "Revenue", "RelatedParty",
                                              "DisclosureOfTransactions")):
                         continue
+                    # udf_ 계열 OfOperatingExpenseInvestment는 포함 (DB손보 패턴)
                     total += v
                     break
+            # udf_ 계열 OfOperatingExpenseInvestment는 OtherOperatingExpenseInvestment와 함께 존재할 때만 포함
+            # (동일 회사 내에서 중복 방지)
         return total
 
     fee = _get_pl_multi(COL40_FEE)
