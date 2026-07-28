@@ -194,7 +194,7 @@ def parse_actuarial_sensitivity(xbrl_path, target_year="2025"):
         "ContractualServiceMarginRelatedToContractsThatExistedAtTransitionDateToWhichFairValueApproachHasBeenAppliedMember",
     }
 
-    # Build target context dict
+    # Build target context dict (3-dim 이상 지원)
     target_ctxs = {}  # ctx_id -> "BEL" or "CSM"
     for ctx in root.findall(f"{{{NS_XBRLI}}}context"):
         period = ctx.find(f"{{{NS_XBRLI}}}period")
@@ -205,8 +205,6 @@ def parse_actuarial_sensitivity(xbrl_path, target_year="2025"):
         if end is None or end.text != f"{target_year}-12-31":
             continue
         members = ctx.findall(f".//{{{NS_XBRLDI}}}explicitMember")
-        if len(members) != 3:
-            continue
         dims = {}
         for m in members:
             dim_name = m.get("dimension", "").split(":")[-1]
@@ -230,7 +228,68 @@ def parse_actuarial_sensitivity(xbrl_path, target_year="2025"):
         tag_local = tag.split("_", 1)[1]
         tag_to_col.setdefault(tag_local, []).append((col, comp))
 
-    # Accumulate: some cols (146~150) need BEL + RA sum
+    # 패턴2: 키워드 기반 context 탐색 (삼성생명 등 entity-specific 태그 지원)
+    # 2-dim (Separate + BEL/CSM via DisaggregationAxis or InsuranceContractsByComponentsAxis) + duration
+    SENS_KEYWORDS = {
+        "BEL": {
+            146: ["CancellationRate", "SurrenderRate", "SurrenderRatio", "LapseRate"],
+            147: ["RiskRate", "RiskRatio", "RiskFactor", "MortalityRate"],
+            148: ["ExpenseRate", "OperatingExpenseRate", "ProjectRatio", "ProjectExpenseRate",
+                  "OperatingExpense"],
+            149: ["OtherAssumption"],  # OtherChange 제외 (너무 광범위)
+            150: ["VolumeDifferences", "QuantityDifferences", "FluctuationsDueTo",
+                  "DifferenceOfQuantity", "DifferenceInQuantity", "VolumeDifference"],
+            158: ["LossComponent", "LossFactor"],
+        },
+        "CSM": {
+            153: ["CancellationRate", "SurrenderRate", "SurrenderRatio", "LapseRate"],
+            154: ["RiskRate", "RiskRatio", "RiskFactor", "MortalityRate"],
+            155: ["ExpenseRate", "OperatingExpenseRate", "ProjectRatio"],
+            156: ["OtherAssumption"],
+            157: ["VolumeDifferences", "QuantityDifferences", "FluctuationsDueTo",
+                  "DifferenceOfQuantity", "DifferenceInQuantity"],
+        },
+    }
+
+    # alt_ctxs: 패턴2 context (삼성생명 2-dim + 현대해상/DB손보/한화 5~6-dim entity-specific)
+    alt_ctxs = {}  # ctx_id -> "BEL" or "CSM"
+    for ctx in root.findall(f"{{{NS_XBRLI}}}context"):
+        period = ctx.find(f"{{{NS_XBRLI}}}period")
+        start = period.find(f"{{{NS_XBRLI}}}startDate")
+        end = period.find(f"{{{NS_XBRLI}}}endDate")
+        if start is None or end is None: continue
+        if start.text != f"{target_year}-01-01" or end.text != f"{target_year}-12-31": continue
+        members = ctx.findall(f".//{{{NS_XBRLDI}}}explicitMember")
+        dims = {}
+        for m in members:
+            dim_name = m.get("dimension", "").split(":")[-1]
+            val = (m.text or "").split(":")[-1]
+            dims[dim_name] = val
+        if "SeparateMember" != dims.get("ConsolidatedAndSeparateFinancialStatementsAxis", ""):
+            continue
+        # 이미 target_ctxs에 있으면 skip
+        ctx_id = ctx.get("id", "")
+        if ctx_id in target_ctxs: continue
+
+        comp = dims.get("InsuranceContractsByComponentsAxis", "")
+        disagg = dims.get("DisaggregationOfInsuranceContractsAxis", "")
+
+        # 패턴A: 2-dim, DisaggregationAxis=BEL/CSM (삼성생명)
+        if len(members) == 2 and not comp:
+            if bel_member in disagg:
+                alt_ctxs[ctx_id] = "BEL"
+            elif any(m in disagg for m in csm_members):
+                alt_ctxs[ctx_id] = "CSM"
+        # 패턴B: 5~6-dim, InsuranceContractsIssuedMember + BEL/CSM component (현대해상/DB손보/한화)
+        elif len(members) >= 4 and "InsuranceContractsIssuedMember" == disagg:
+            if comp == bel_member:
+                alt_ctxs[ctx_id] = "BEL"
+            elif comp == "RiskAdjustmentForNonfinancialRiskMember":
+                alt_ctxs[ctx_id] = "RA"
+            elif comp in csm_members:
+                alt_ctxs[ctx_id] = "CSM"
+
+    # Accumulate: standard ACTUARIAL_MAPPING (미래에셋 패턴)
     result = {}
     for elem in root:
         ctx_ref = elem.get("contextRef", "")
@@ -246,10 +305,37 @@ def parse_actuarial_sensitivity(xbrl_path, target_year="2025"):
         comp_type = target_ctxs[ctx_ref]
         for col, expected_comp in tag_to_col[tag]:
             if expected_comp == "BEL" and comp_type in ("BEL", "RA"):
-                # Col146~150: accumulate BEL + RA
                 result[(col, "BEL")] = result.get((col, "BEL"), 0.0) + v
             elif expected_comp == comp_type:
                 result[(col, comp_type)] = result.get((col, comp_type), 0.0) + v
+
+    # 키워드 기반 탐색: target_ctxs + alt_ctxs 모두 탐색
+    # (ACTUARIAL_MAPPING에 없는 entity-specific 태그 지원)
+    keyword_seen = set()  # (ctx_id, col) -> 중복 방지
+    all_keyword_ctxs = {**target_ctxs, **alt_ctxs}
+    for elem in root:
+        ctx_ref = elem.get("contextRef", "")
+        if ctx_ref not in all_keyword_ctxs or not elem.text:
+            continue
+        comp_type = all_keyword_ctxs[ctx_ref]
+        tag = elem.tag.split("}")[-1] if "}" in elem.tag else elem.tag
+        # ACTUARIAL_MAPPING에 있는 태그는 이미 처리됨
+        if tag in tag_to_col:
+            continue
+        try:
+            v = float(elem.text.strip())
+        except ValueError:
+            continue
+        if v == 0:
+            continue
+        # 키워드 매핑
+        for col, kwords in SENS_KEYWORDS.get(comp_type, {}).items():
+            if any(k.lower() in tag.lower() for k in kwords):
+                pair = (ctx_ref, col)
+                if pair not in keyword_seen:
+                    keyword_seen.add(pair)
+                    result[(col, comp_type)] = result.get((col, comp_type), 0.0) + v
+                break
     return result
 
 
