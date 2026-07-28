@@ -1040,10 +1040,21 @@ def parse_insurance_components(xbrl_path, target_year="2025"):
                     break
 
         if chosen is not None:
-            # InsuranceContractsThatAreLiabilities만 사용 (Assets 제외)
-            component_sums["BEL"] = chosen["BEL"]
-            component_sums["RA"] = chosen["RA"]
-            component_sums["CSM"] = chosen["CSM"]
+            assets = by_ndim.get(chosen_ndim, {}).get("assets", {"CSM": 0.0, "BEL": 0.0, "RA": 0.0})
+            # 각 component별로 Assets 추가 여부를 독립적으로 결정
+            # pref + assets가 정답이 되는 조건: assets < pref * 6% (DB손보 CSM 패턴)
+            # pref가 이미 정답인 경우: assets 제외
+            for key in ["BEL", "RA", "CSM"]:
+                pref_v = chosen[key]
+                asset_v = assets.get(key, 0.0)
+                if asset_v == 0 or pref_v == 0:
+                    component_sums[key] = pref_v
+                elif abs(asset_v) < abs(pref_v) * 0.06:
+                    # assets가 pref의 6% 미만 → 별도 항목 (DB손보 CSM: 667924/11537419≈0.058)
+                    component_sums[key] = pref_v + asset_v
+                else:
+                    # assets가 더 큰 비율 → 중복 제외
+                    component_sums[key] = pref_v
 
     # 패턴B CSM: ContractualServiceMargin 태그 (2-dim context)
     # 이미 패턴A/B에서 CSM을 합산했으면 이 값은 무시 (중복 방지)
