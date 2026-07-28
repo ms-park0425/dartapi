@@ -47,7 +47,7 @@ COMPANIES = [
 BS_MAPPING = {
     4: "ifrs-full_Assets",
     5: "ifrs-full_FinancialAssetsAtFairValueThroughProfitOrLoss",
-    6: "ifrs-full_FinancialAssetsAtFairValueThroughOtherComprehensiveIncome",
+    6: "ifrs-full_FinancialAssetsAtFairValueThroughOtherComprehensiveIncome",  # dart_ fallback: SecuritiesAtFairValueThroughOtherComprehensiveIncome
     # Col7: 상각후원가 자산 - LoansAtAmortisedCost + SecuritiesAtAmortisedCost 합산도 후보
     7: "ifrs-full_FinancialAssetsAtAmortisedCost",
     8: "ifrs-full_InvestmentsInSubsidiariesJointVenturesAndAssociates",
@@ -1250,6 +1250,12 @@ def extract_company_data(corp_name, year="2025"):
         val = _get_bs(account_id)
         if val is not None:
             result[col] = val / 1e6  # 원 → 백만원
+
+    # Col6 추가 fallback (신한라이프 패턴: SecuritiesAtFairValueThroughOCI)
+    if 6 not in result:
+        v = bs.get("dart_SecuritiesAtFairValueThroughOtherComprehensiveIncome")
+        if v is not None:
+            result[6] = v / 1e6
 
     # PL 매핑
     for col, account_id in PL_MAPPING.items():
