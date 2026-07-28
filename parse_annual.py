@@ -1214,16 +1214,16 @@ def extract_company_data(corp_name, year="2025"):
 
     if ac_fin > 0:
         if loans_ac > ac_fin:
-            # FinancialAssetsAtAmortisedCost가 LoansAtAmortisedCost보다 작으면 Loans+Securities+Other 합산
+            # loans가 ac_fin보다 크면 loans+sec+other로 합산
             result[7] = (loans_ac + sec_ac + other_ac) / 1e6
+        elif loans_ac == 0 and sec_ac == 0 and other_ac > 0:
+            # 메리츠화재 패턴: FinancialAssets + OtherFinancialAssets 별도
+            result[7] = (ac_fin + other_ac) / 1e6
         else:
-            # FinancialAssetsAtAmortisedCost가 충분히 크면 그것만 사용 (OtherFinancial은 이미 포함)
             result[7] = ac_fin / 1e6
     elif sec_ac > 0:
-        # Securities만 있거나 Loans보다 크면 Securities 우선 (신한라이프: 대출채권은 별도 항목)
-        # Securities가 Loans보다 크면 이미 포함 관계 → Securities만
         if sec_ac >= loans_ac:
-            result[7] = (sec_ac + other_ac) / 1e6
+            result[7] = sec_ac / 1e6  # 신한라이프: 대출채권(보험계약대출) 제외
         else:
             result[7] = (loans_ac + sec_ac + other_ac) / 1e6
     elif loans_ac > 0:
