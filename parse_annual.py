@@ -124,7 +124,8 @@ OCI_ACCUM_MAPPING = {
     # col: list of keywords (member 이름에 하나라도 포함되면 해당 col에 매핑)
     # 더 구체적인 키워드를 앞에 배치, 순서가 중요함
     24: ["OtherComprehensiveIncome"],
-    25: ["FinancialAssets", "GainsAndLossesOnFinancialAssets", "GainsAndLossesFromInvestments"],  # FVOCI 관련 합산
+    25: ["FinancialAssets", "GainsAndLossesOnFinancialAssets", "GainsAndLossesFromInvestments",
+         "GainsAndLossesOnDebtAndEquity"],  # FVOCI 관련 합산
     26: ["InsuranceFinanceIncomeExpenses", "InsuranceContract"],
     27: ["ReinsuranceFinance", "ReinsuranceContract"],
     28: ["CashFlowHedges", "CashFlow", "Hedging", "ExchangeDifferences"],
@@ -1390,7 +1391,8 @@ def extract_company_data(corp_name, year="2025"):
 
     # Col82: CSM 증감 = Col80+Col76-Col77+Col78+Col79-Col75
     if all(c in result for c in [75, 76, 77, 78, 79, 80]):
-        result[82] = result[80] + result[76] - result[77] + result[78] + result[79] - result[75]
+        val82 = result[80] + result[76] - result[77] + result[78] + result[79] - result[75]
+        result[82] = val82  # 0이어도 저장 (체크값)
 
     return result
 
