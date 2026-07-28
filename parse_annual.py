@@ -92,7 +92,7 @@ OCI_MAPPING = {
         "ifrs-full_OtherComprehensiveIncomeNetOfTaxFinancialAssetsMeasuredAtFairValueThroughOtherComprehensiveIncomeTotal",
         "ifrs-full_OtherComprehensiveIncomeNetOfTaxChangeInFairValueOfFinancialAssetsMeasuredAtFairValueThroughOtherComprehensiveIncome",
     ],
-    59: ["ifrs-full_OtherComprehensiveIncomeNetOfTaxCashFlowHedges"],
+    # Col59는 OCI_SUM_MAPPING으로 처리 (CashFlowHedges + GainsLossesOnHedgingInstruments 합산)
     60: [
         "ifrs-full_OtherComprehensiveIncomeNetOfTaxGainsLossesOnRevaluation",
         "ifrs-full_OtherComprehensiveIncomeNetOfTaxGainsLossesOnRevaluationOfPropertyPlantAndEquipment",
@@ -105,6 +105,10 @@ OCI_SUM_MAPPING = {
     58: (
         "ifrs-full_OtherComprehensiveIncomeNetOfTaxInsuranceFinanceIncomeExpensesFromInsuranceContractsIssuedExcludedFromProfitOrLossThatWillBeReclassifiedToProfitOrLoss",
         "ifrs-full_OtherComprehensiveIncomeNetOfTaxFinanceIncomeExpensesFromReinsuranceContractsHeldExcludedFromProfitOrLoss",
+    ),
+    59: (
+        "ifrs-full_OtherComprehensiveIncomeNetOfTaxCashFlowHedges",
+        "dart_OtherComprehensiveIncomeNetOfTaxGainsLossesOnHedgingInstrument",
     ),
 }
 
