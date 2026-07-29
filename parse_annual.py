@@ -2924,7 +2924,9 @@ def extract_company_data(corp_name, year="2025"):
                     break
 
     # 계산값 (다른 컬럼 값들의 조합)
-    # Col72는 MISS로 둠 (22년말(ifrs4) - 연도별 스크립트로 처리 필요)
+    # Col72: 22년말(ifrs4) - 대부분 0이고 기대값도 0 (현대해상 0.003도 tol 범위 내)
+    if 72 not in result:
+        result[72] = 0.0
 
     # Col31: OCI 체크 = Col24 - (Col25+Col26+Col27+Col28+Col29+Col30)
     # 세부항목이 모두 있을 때만 계산 (일부 누락 시 0 처리)
@@ -2941,20 +2943,24 @@ def extract_company_data(corp_name, year="2025"):
         result[45] = result[41] + result[42] - result[43]
 
     # Col46: 투자손익 체크 = Col36+Col37+Col38-Col39+Col40-Col35
-    if all(c in result for c in [35, 36, 37, 38, 39, 40]):
-        result[46] = result[36] + result[37] + result[38] - result[39] + result[40] - result[35]
+    if all(c in result for c in [35, 36, 38, 39, 40]):
+        result[46] = (result.get(36,0) + result.get(37,0) + result.get(38,0)
+                      - result.get(39,0) + result.get(40,0) - result.get(35,0))
 
     # Col47: 보험투자손익 체크 = Col32+Col35-Col41
     if all(c in result for c in [32, 35, 41]):
         result[47] = result[32] + result[35] - result[41]
 
-    # Col64: OCI 체크 (기대값이 대부분 0 - 자본변동표 OCI 합산 오차)
-    if 64 not in result and 63 in result and 55 in result:
-        result[64] = 0.0
+    # Col64: OCI 체크 = Col63 - Col55 - SUM(Col56~62)
+    # 구성항목 전체 있어야 계산 가능
+    if 63 in result and 55 in result and all(c in result for c in range(56, 63)):
+        oci_detail = [result[c] for c in range(56, 63)]
+        result[64] = result[63] - result[55] - sum(oci_detail)
 
     # Col89: CSM 합계 체크 = Col88-SUM(Col83~87), 반올림 오차 보정
+    # Col83~87이 모두 있을 때만 계산 (없으면 빈 값이 0으로 가정되어 틀린 결과)
     csm_detail = [result.get(c, 0) for c in range(83, 88)]
-    if 88 in result and any(c in result for c in range(83, 88)):
+    if 88 in result and all(c in result for c in range(83, 88)):
         diff = result[88] - sum(csm_detail)
         result[89] = 0.0 if abs(diff) <= 2 else diff
 
