@@ -1,0 +1,109 @@
+
+======================================================================
+[삼성화재]
+======================================================================
+  단위 정의: [('KRW', 'iso4217:KRW'), ('PURE', 'xbrli:pure'), ('USD', 'iso4217:USD'), ('SHARES', 'xbrli:shares')]
+  Sep instant 2025-12-31: 1670개
+  Sep contexts dim 분포: {2: 412, 4: 447, 6: 211, 5: 295, 3: 304, 1: 1}
+
+  [InsuranceContracts 관련 태그 (Sep, 2025-12-31)]
+    tag=ExpectedInsuranceClaimsArisingFromContractsWithinTheScopeOfIfrs17OfDisclosureOfExpectedInsuranceBenefitsComparedToRiskInsurancePremiumsForLongTermDamageInsurancePresentValueLineItemsOfDisclosureOfExpectedInsuranceBenefitsComparedToRiskInsurancePremiumsForLongTermDamageInsurancePresentValueTableOfItems, val=50847337000000
+      entity00139214:PortfolioClassificationAxisOfDisclosureOfInsuranceLiabilitiesByAccountingModelAndPortfolioOfAxis = entity00139214:IndirectParNonDividendDiseaseMemberOfPortfolioClassificationMemberOfDisclosureOfExpectedInsuranceBenefitsComparedToRiskInsurancePremiumsForLongTermDamageInsurancePresentValueTableOfMember
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:SeparateMember
+      ifrs-full:TypesOfContractsAxis = dart:LongtermInsuranceMember
+    tag=ExpectedInsuranceClaimsArisingFromContractsWithinTheScopeOfIfrs17OfDisclosureOfExpectedInsuranceBenefitsComparedToRiskInsurancePremiumsForLongTermDamageInsurancePresentValueLineItemsOfDisclosureOfExpectedInsuranceBenefitsComparedToRiskInsurancePremiumsForLongTermDamageInsurancePresentValueTableOfItems, val=50847337000000
+      entity00139214:PortfolioClassificationAxisOfDisclosureOfInsuranceLiabilitiesByAccountingModelAndPortfolioOfAxis = entity00139214:IndirectParNonDividendDiseaseMemberOfPortfolioClassificationMemberOfDisclosureOfExpectedInsuranceBenefitsComparedToRiskInsurancePremiumsForLongTermDamageInsurancePresentValueTableOfMember
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:SeparateMember
+      ifrs-full:DisaggregationOfInsuranceContractsAxis = ifrs-full:InsuranceContractsIssuedMember
+      ifrs-full:InsuranceContractsByRemainingCoverageAndIncurredClaimsAxis = dart:LiabilitiesForRemainingCoverageMember
+    tag=RiskPremiumsArisingFromContractsWithinTheScopeOfIfrs17OfDisclosureOfExpectedInsuranceBenefitsComparedToRiskInsurancePremiumsForLongTermDamageInsurancePresentValueLineItemsOfDisclosureOfExpectedInsuranceBenefitsComparedToRiskInsurancePremiumsForLongTermDamageInsurancePresentValueTableOfItems, val=48763392000000
+      entity00139214:PortfolioClassificationAxisOfDisclosureOfInsuranceLiabilitiesByAccountingModelAndPortfolioOfAxis = entity00139214:IndirectParNonDividendDiseaseMemberOfPortfolioClassificationMemberOfDisclosureOfExpectedInsuranceBenefitsComparedToRiskInsurancePremiumsForLongTermDamageInsurancePresentValueTableOfMember
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:SeparateMember
+      ifrs-full:TypesOfContractsAxis = dart:LongtermInsuranceMember
+    tag=RiskPremiumsArisingFromContractsWithinTheScopeOfIfrs17OfDisclosureOfExpectedInsuranceBenefitsComparedToRiskInsurancePremiumsForLongTermDamageInsurancePresentValueLineItemsOfDisclosureOfExpectedInsuranceBenefitsComparedToRiskInsurancePremiumsForLongTermDamageInsurancePresentValueTableOfItems, val=48763392000000
+      entity00139214:PortfolioClassificationAxisOfDisclosureOfInsuranceLiabilitiesByAccountingModelAndPortfolioOfAxis = entity00139214:IndirectParNonDividendDiseaseMemberOfPortfolioClassificationMemberOfDisclosureOfExpectedInsuranceBenefitsComparedToRiskInsurancePremiumsForLongTermDamageInsurancePresentValueTableOfMember
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:SeparateMember
+      ifrs-full:DisaggregationOfInsuranceContractsAxis = ifrs-full:InsuranceContractsIssuedMember
+      ifrs-full:InsuranceContractsByRemainingCoverageAndIncurredClaimsAxis = dart:LiabilitiesForRemainingCoverageMember
+    tag=InsuranceContractsIssuedThatAreLiabilities, val=48734812310826
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:SeparateMember
+    tag=InsuranceContractsThatAreLiabilities, val=48734812000000
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:SeparateMember
+      ifrs-full:DisaggregationOfInsuranceContractsAxis = ifrs-full:InsuranceContractsIssuedMember
+    tag=InsuranceContractsLiabilityAsset, val=48734800000000
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:SeparateMember
+      ifrs-full:DisaggregationOfInsuranceContractsAxis = ifrs-full:InsuranceContractsIssuedMember
+    tag=ExpectedInsuranceClaimsArisingFromContractsWithinTheScopeOfIfrs17OfDisclosureOfExpectedInsuranceBenefitsComparedToRiskInsurancePremiumsForLongTermDamageInsuranceLineItemsOfDisclosureOfExpectedInsuranceBenefitsComparedToRiskInsurancePremiumsForLongTermDamageInsuranceTableOfItems, val=43001776000000
+      entity00139214:PortfolioClassificationAxisOfDisclosureOfInsuranceLiabilitiesByAccountingModelAndPortfolioOfAxis = entity00139214:IndirectParNonDividendDiseaseMemberOfPortfolioClassificationMemberOfDisclosureOfExpectedInsuranceBenefitsComparedToRiskInsurancePremiumsForLongTermDamageInsuranceTableOfMember
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:SeparateMember
+      ifrs-full:MaturityAxis = entity00139214:LaterThanThirtyYearsMemberOfAggregatedTimeBandsMemberOfDisclosureOfExpectedInsuranceBenefitsComparedToRiskInsurancePremiumsForLongTermDamageInsuranceTableOfMember
+      ifrs-full:TypesOfContractsAxis = dart:LongtermInsuranceMember
+    tag=ExpectedInsuranceClaimsArisingFromContractsWithinTheScopeOfIfrs17OfDisclosureOfExpectedInsuranceBenefitsComparedToRiskInsurancePremiumsForLongTermDamageInsuranceLineItemsOfDisclosureOfExpectedInsuranceBenefitsComparedToRiskInsurancePremiumsForLongTermDamageInsuranceTableOfItems, val=43001776000000
+      entity00139214:PortfolioClassificationAxisOfDisclosureOfInsuranceLiabilitiesByAccountingModelAndPortfolioOfAxis = entity00139214:IndirectParNonDividendDiseaseMemberOfPortfolioClassificationMemberOfDisclosureOfExpectedInsuranceBenefitsComparedToRiskInsurancePremiumsForLongTermDamageInsuranceTableOfMember
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:SeparateMember
+      ifrs-full:DisaggregationOfInsuranceContractsAxis = ifrs-full:InsuranceContractsIssuedMember
+      ifrs-full:InsuranceContractsByRemainingCoverageAndIncurredClaimsAxis = dart:LiabilitiesForRemainingCoverageMember
+    tag=TheCarryingAmountOfInsuranceContractLiabilitiesArisingFromContractsWithinTheScopeOfIfrs17OfDisclosureOfTheBookValueOfInsuranceContractLiabilitiesLineItemsOfDisclosureOfTheBookValueOfInsuranceContractLiabilitiesTableOfItems, val=42559095000000
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:SeparateMember
+    tag=RiskPremiumsArisingFromContractsWithinTheScopeOfIfrs17OfDisclosureOfExpectedInsuranceBenefitsComparedToRiskInsurancePremiumsForLongTermDamageInsuranceLineItemsOfDisclosureOfExpectedInsuranceBenefitsComparedToRiskInsurancePremiumsForLongTermDamageInsuranceTableOfItems, val=39032647000000
+      entity00139214:PortfolioClassificationAxisOfDisclosureOfInsuranceLiabilitiesByAccountingModelAndPortfolioOfAxis = entity00139214:IndirectParNonDividendDiseaseMemberOfPortfolioClassificationMemberOfDisclosureOfExpectedInsuranceBenefitsComparedToRiskInsurancePremiumsForLongTermDamageInsuranceTableOfMember
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:SeparateMember
+      ifrs-full:MaturityAxis = entity00139214:LaterThanThirtyYearsMemberOfAggregatedTimeBandsMemberOfDisclosureOfExpectedInsuranceBenefitsComparedToRiskInsurancePremiumsForLongTermDamageInsuranceTableOfMember
+      ifrs-full:TypesOfContractsAxis = dart:LongtermInsuranceMember
+    tag=RiskPremiumsArisingFromContractsWithinTheScopeOfIfrs17OfDisclosureOfExpectedInsuranceBenefitsComparedToRiskInsurancePremiumsForLongTermDamageInsuranceLineItemsOfDisclosureOfExpectedInsuranceBenefitsComparedToRiskInsurancePremiumsForLongTermDamageInsuranceTableOfItems, val=39032647000000
+      entity00139214:PortfolioClassificationAxisOfDisclosureOfInsuranceLiabilitiesByAccountingModelAndPortfolioOfAxis = entity00139214:IndirectParNonDividendDiseaseMemberOfPortfolioClassificationMemberOfDisclosureOfExpectedInsuranceBenefitsComparedToRiskInsurancePremiumsForLongTermDamageInsuranceTableOfMember
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:SeparateMember
+      ifrs-full:DisaggregationOfInsuranceContractsAxis = ifrs-full:InsuranceContractsIssuedMember
+      ifrs-full:InsuranceContractsByRemainingCoverageAndIncurredClaimsAxis = dart:LiabilitiesForRemainingCoverageMember
+    tag=TheCarryingAmountOfInsuranceContractLiabilitiesArisingFromContractsWithinTheScopeOfIfrs17OfDisclosureOfTheBookValueOfInsuranceContractLiabilitiesLineItemsOfDisclosureOfTheBookValueOfInsuranceContractLiabilitiesTableOfItems, val=37985711000000
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:SeparateMember
+      ifrs-full:TypesOfContractsAxis = dart:LongtermInsuranceMember
+    tag=InsuranceContractsIssuedWithoutParticipationFeaturesThatAreLiabilitiesOfInsuranceContractsIssuedThatAreLiabilities, val=29201963175479
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:SeparateMember
+    tag=RiskPremiumsArisingFromContractsWithinTheScopeOfIfrs17OfDisclosureOfExpectedInsuranceBenefitsComparedToRiskInsurancePremiumsForLongTermDamageInsurancePresentValueLineItemsOfDisclosureOfExpectedInsuranceBenefitsComparedToRiskInsurancePremiumsForLongTermDamageInsurancePresentValueTableOfItems, val=27022313000000
+      entity00139214:PortfolioClassificationAxisOfDisclosureOfInsuranceLiabilitiesByAccountingModelAndPortfolioOfAxis = entity00139214:NonParNonDividendDiseaseMemberOfPortfolioClassificationMemberOfDisclosureOfExpectedInsuranceBenefitsComparedToRiskInsurancePremiumsForLongTermDamageInsurancePresentValueTableOfMember
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:SeparateMember
+      ifrs-full:TypesOfContractsAxis = dart:LongtermInsuranceMember
+    tag=RiskPremiumsArisingFromContractsWithinTheScopeOfIfrs17OfDisclosureOfExpectedInsuranceBenefitsComparedToRiskInsurancePremiumsForLongTermDamageInsurancePresentValueLineItemsOfDisclosureOfExpectedInsuranceBenefitsComparedToRiskInsurancePremiumsForLongTermDamageInsurancePresentValueTableOfItems, val=27022313000000
+      entity00139214:PortfolioClassificationAxisOfDisclosureOfInsuranceLiabilitiesByAccountingModelAndPortfolioOfAxis = entity00139214:NonParNonDividendDiseaseMemberOfPortfolioClassificationMemberOfDisclosureOfExpectedInsuranceBenefitsComparedToRiskInsurancePremiumsForLongTermDamageInsurancePresentValueTableOfMember
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:SeparateMember
+      ifrs-full:DisaggregationOfInsuranceContractsAxis = ifrs-full:InsuranceContractsIssuedMember
+      ifrs-full:InsuranceContractsByRemainingCoverageAndIncurredClaimsAxis = dart:LiabilitiesForRemainingCoverageMember
+    tag=ExpectedInsuranceClaimsArisingFromContractsWithinTheScopeOfIfrs17OfDisclosureOfExpectedInsuranceBenefitsComparedToRiskInsurancePremiumsForLongTermDamageInsurancePresentValueLineItemsOfDisclosureOfExpectedInsuranceBenefitsComparedToRiskInsurancePremiumsForLongTermDamageInsurancePresentValueTableOfItems, val=24274815000000
+      entity00139214:PortfolioClassificationAxisOfDisclosureOfInsuranceLiabilitiesByAccountingModelAndPortfolioOfAxis = entity00139214:NonParNonDividendDiseaseMemberOfPortfolioClassificationMemberOfDisclosureOfExpectedInsuranceBenefitsComparedToRiskInsurancePremiumsForLongTermDamageInsurancePresentValueTableOfMember
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:SeparateMember
+      ifrs-full:TypesOfContractsAxis = dart:LongtermInsuranceMember
+    tag=ExpectedInsuranceClaimsArisingFromContractsWithinTheScopeOfIfrs17OfDisclosureOfExpectedInsuranceBenefitsComparedToRiskInsurancePremiumsForLongTermDamageInsurancePresentValueLineItemsOfDisclosureOfExpectedInsuranceBenefitsComparedToRiskInsurancePremiumsForLongTermDamageInsurancePresentValueTableOfItems, val=24274815000000
+      entity00139214:PortfolioClassificationAxisOfDisclosureOfInsuranceLiabilitiesByAccountingModelAndPortfolioOfAxis = entity00139214:NonParNonDividendDiseaseMemberOfPortfolioClassificationMemberOfDisclosureOfExpectedInsuranceBenefitsComparedToRiskInsurancePremiumsForLongTermDamageInsurancePresentValueTableOfMember
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:SeparateMember
+      ifrs-full:DisaggregationOfInsuranceContractsAxis = ifrs-full:InsuranceContractsIssuedMember
+      ifrs-full:InsuranceContractsByRemainingCoverageAndIncurredClaimsAxis = dart:LiabilitiesForRemainingCoverageMember
+    tag=CashFlowAndReferenceAmountWhenMarketVariablesRiseOfDisclosureOfSensitivityAnalysisToChangesInInsuranceRiskVariablesThatAriseFromContractsWithinScopeOfIfrs17LineItemsOfDisclosureOfSensitivityAnalysisToChangesInInsuranceRiskVariablesThatAriseFromContractsWithinScopeOfIfrs17TableOfItems, val=23818588000000
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:SeparateMember
+      ifrs-full:RiskExposuresAxis = entity00139214:RiskOfDisabilityCompensationForActualLossMemberOfRiskVariablesMemberOfDisclosureOfSensitivityAnalysisToChangesInInsuranceRiskVariablesThatAriseFromContractsWithinScopeOfIfrs17TableOfMember
+      ifrs-full:TypesOfContractsAxis = dart:LongtermInsuranceMember
+      ifrs-full:TypesOfRisksAxis = ifrs-full:InsuranceRiskMember
+    tag=CashFlowAndReferenceAmountWhenMarketVariablesRiseOfDisclosureOfSensitivityAnalysisToChangesInInsuranceRiskVariablesThatAriseFromContractsWithinScopeOfIfrs17LineItemsOfDisclosureOfSensitivityAnalysisToChangesInInsuranceRiskVariablesThatAriseFromContractsWithinScopeOfIfrs17TableOfItems, val=23818588000000
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:SeparateMember
+      ifrs-full:RiskExposuresAxis = entity00139214:PropertyAndOtherRisksMemberOfRiskVariablesMemberOfDisclosureOfSensitivityAnalysisToChangesInInsuranceRiskVariablesThatAriseFromContractsWithinScopeOfIfrs17TableOfMember
+      ifrs-full:TypesOfContractsAxis = dart:LongtermInsuranceMember
+      ifrs-full:TypesOfRisksAxis = ifrs-full:InsuranceRiskMember
+
+  [BEL/RA/CSM 직접 탐색 (Sep+All Instant 2025-12-31)]
+
+  BEL=78736684백만원 탐색:
+    -> 모든 scale에서 0.1% 이내 매칭 없음
+
+  RA=1616009백만원 탐색:
+    -> 모든 scale에서 0.1% 이내 매칭 없음
+
+  CSM=8897609백만원 탐색:
+    -> 모든 scale에서 0.1% 이내 매칭 없음
+
+  [Sep instant 2025-12-31 - 대규모 값 상위 10개]
+Traceback (most recent call last):
+  File "C:\MALIFE\dartapi\analyze_nonlife6.py", line 233, in <module>
+    analyze(company, info["path"], info["targets"])
+  File "C:\MALIFE\dartapi\analyze_nonlife6.py", line 190, in analyze
+    large_sep.sort(reverse=True)
+TypeError: '<' not supported between instances of 'dict' and 'dict'

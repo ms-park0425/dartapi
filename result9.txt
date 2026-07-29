@@ -1,0 +1,765 @@
+
+======================================================================
+[삼성화재]
+======================================================================
+
+  [dart 네임스페이스 BEL/RA/CSM 관련 태그 (Sep 2025-12-31)]
+    ns=nomy/2025-12-31/entity00139214, tag=NumberOfImportantLitigationsOfDisclosureOfLegalProceedingsCo
+      val_mn=0, Con, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      dart:ClassesofLegalProceedingsContingentLiabilityA = entity00139214:LawsuitNotRelatedToInsurancePayoutEligibilityMemberOfDefendantInLawsuitsMemberOfDisclosureOfLegalProceedingsContingentLiabilityTotalTableOfMember
+    ns=nomy/2025-12-31/entity00139214, tag=NumberOfImportantLitigationsOfDisclosureOfLegalProceedingsCo
+      val_mn=0, Sep, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+      dart:ClassesofLegalProceedingsContingentLiabilityA = entity00139214:LawsuitNotRelatedToInsurancePayoutEligibilityMemberOfDefendantInLawsuitsMemberOfDisclosureOfLegalProceedingsContingentLiabilityTotalTableOfMember
+    ns=nomy/2025-12-31/entity00139214, tag=TheCarryingAmountOfInsuranceContractLiabilitiesArisingFromCo
+      val_mn=42780784000000, Con, n_dim=1
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+    ns=nomy/2025-12-31/entity00139214, tag=TheCarryingAmountOfInsuranceContractLiabilitiesArisingFromCo
+      val_mn=1532139000000, Con, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      ifrs-full:TypesOfContractsAxis = dart:GeneralInsuranceMember
+    ns=nomy/2025-12-31/entity00139214, tag=TheCarryingAmountOfInsuranceContractLiabilitiesArisingFromCo
+      val_mn=3262934000000, Con, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      ifrs-full:TypesOfContractsAxis = dart:AutomobileInsuranceMember
+    ns=nomy/2025-12-31/entity00139214, tag=TheCarryingAmountOfInsuranceContractLiabilitiesArisingFromCo
+      val_mn=37985711000000, Con, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      ifrs-full:TypesOfContractsAxis = dart:LongtermInsuranceMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=RiskAdjustmentForNonFinancialRiskAboutLiabilitiesForIncurred
+      val_mn=46886000000, Con, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      ifrs-full:TypesOfContractsAxis = dart:GeneralInsuranceMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=RiskAdjustmentForNonFinancialRiskAboutLiabilitiesForIncurred
+      val_mn=35723000000, Con, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      ifrs-full:TypesOfContractsAxis = dart:AutomobileInsuranceMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=RiskAdjustmentForNonFinancialRiskAboutLiabilitiesForIncurred
+      val_mn=45532000000, Con, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      ifrs-full:TypesOfContractsAxis = dart:LongtermInsuranceMember
+    ns=nomy/2025-12-31/entity00139214, tag=TheCarryingAmountOfInsuranceContractLiabilitiesArisingFromCo
+      val_mn=42559095000000, Sep, n_dim=1
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+    ns=nomy/2025-12-31/entity00139214, tag=TheCarryingAmountOfInsuranceContractLiabilitiesArisingFromCo
+      val_mn=1310450000000, Sep, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+      ifrs-full:TypesOfContractsAxis = dart:GeneralInsuranceMember
+    ns=nomy/2025-12-31/entity00139214, tag=TheCarryingAmountOfInsuranceContractLiabilitiesArisingFromCo
+      val_mn=3262934000000, Sep, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+      ifrs-full:TypesOfContractsAxis = dart:AutomobileInsuranceMember
+    ns=nomy/2025-12-31/entity00139214, tag=TheCarryingAmountOfInsuranceContractLiabilitiesArisingFromCo
+      val_mn=37985711000000, Sep, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+      ifrs-full:TypesOfContractsAxis = dart:LongtermInsuranceMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=RiskAdjustmentForNonFinancialRiskAboutLiabilitiesForIncurred
+      val_mn=46886000000, Sep, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+      ifrs-full:TypesOfContractsAxis = dart:GeneralInsuranceMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=RiskAdjustmentForNonFinancialRiskAboutLiabilitiesForIncurred
+      val_mn=35723000000, Sep, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+      ifrs-full:TypesOfContractsAxis = dart:AutomobileInsuranceMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=RiskAdjustmentForNonFinancialRiskAboutLiabilitiesForIncurred
+      val_mn=45532000000, Sep, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+      ifrs-full:TypesOfContractsAxis = dart:LongtermInsuranceMember
+
+  [TheCarryingAmount / BookValue 류 태그 (Sep 2025-12-31)]
+    tag=TheCarryingAmountOfInsuranceContractLiabilitiesArisingFromContractsWithinTheScop
+      val_mn=42780784000000, Con, n_dim=1
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:ConsolidatedMember
+    tag=TheCarryingAmountOfInsuranceContractLiabilitiesArisingFromContractsWithinTheScop
+      val_mn=1532139000000, Con, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:ConsolidatedMember
+      ifrs-full:TypesOfContractsAxis = dart:GeneralInsuranceMember
+    tag=TheCarryingAmountOfInsuranceContractLiabilitiesArisingFromContractsWithinTheScop
+      val_mn=3262934000000, Con, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:ConsolidatedMember
+      ifrs-full:TypesOfContractsAxis = dart:AutomobileInsuranceMember
+    tag=TheCarryingAmountOfInsuranceContractLiabilitiesArisingFromContractsWithinTheScop
+      val_mn=37985711000000, Con, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:ConsolidatedMember
+      ifrs-full:TypesOfContractsAxis = dart:LongtermInsuranceMember
+    tag=TheCarryingAmountOfInsuranceContractLiabilitiesArisingFromContractsWithinTheScop
+      val_mn=42559095000000, Sep, n_dim=1
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:SeparateMember
+    tag=TheCarryingAmountOfInsuranceContractLiabilitiesArisingFromContractsWithinTheScop
+      val_mn=1310450000000, Sep, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:SeparateMember
+      ifrs-full:TypesOfContractsAxis = dart:GeneralInsuranceMember
+    tag=TheCarryingAmountOfInsuranceContractLiabilitiesArisingFromContractsWithinTheScop
+      val_mn=3262934000000, Sep, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:SeparateMember
+      ifrs-full:TypesOfContractsAxis = dart:AutomobileInsuranceMember
+    tag=TheCarryingAmountOfInsuranceContractLiabilitiesArisingFromContractsWithinTheScop
+      val_mn=37985711000000, Sep, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:SeparateMember
+      ifrs-full:TypesOfContractsAxis = dart:LongtermInsuranceMember
+
+  [정답값 근사 탐색 (전체 태그, Sep 2025-12-31 instant, ±2%)]
+
+  BEL = 78736684백만원:
+
+  RA = 1616009백만원:
+    err=0.0015 | InvestmentsInSubsidiariesJointVenturesAndAssociates
+      val_mn=1613522 | raw=1613522000876.0 | dec=0 | n_dim=1
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:SeparateMember
+
+  CSM = 8897609백만원:
+    err=0.0115 | ExpectedInsuranceClaimsArisingFromContractsWithinTheScopeOfIfrs17OfDis
+      val_mn=9000000 | raw=9000000.0 | dec=-6 | n_dim=6
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:SeparateMember
+      ifrs-full:DisaggregationOfInsuranceContractsAxis = ifrs-full:InsuranceContractsIssuedMember
+      ifrs-full:TypesOfContractsAxis = dart:LongtermInsuranceMember
+      ifrs-full:InsuranceContractsByRemainingCoverageAndIncurredCl = dart:LiabilitiesForRemainingCoverageMember
+    err=0.0115 | FinancialAssetsPledgedAsCollateralForLiabilitiesOrContingentLiabilitie
+      val_mn=9000000 | raw=9000000.0 | dec=-6 | n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:SeparateMember
+      dart:TypesOfCommitmentsAxis = entity00139214:ProvisionOfReinsuranceCollateralAndLcOpeningLimitAgreement1MemberOfFinancialInstitutionCovenantsMemberOfDisclosureOfCommitmentsTableOfMember
+    err=0.0115 | ExpectedInsuranceClaimsArisingFromContractsWithinTheScopeOfIfrs17OfDis
+      val_mn=9000000 | raw=9000000.0 | dec=-6 | n_dim=4
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:SeparateMember
+      ifrs-full:TypesOfContractsAxis = dart:LongtermInsuranceMember
+      entity00139214:PortfolioClassificationAxisOfDisclosureOfInsu = entity00139214:IndirectParNonDividendAssetsMemberOfPortfolioClassificationMemberOfDisclosureOfExpectedInsuranceBenefitsComparedToRiskInsurancePremiumsForLongTermDamageInsuranceTableOfMember
+      ifrs-full:MaturityAxis = ifrs-full:LaterThanTwentyYearsAndNotLaterThanTwentyfiveYearsMember
+
+======================================================================
+[메리츠화재]
+======================================================================
+
+  [dart 네임스페이스 BEL/RA/CSM 관련 태그 (Sep 2025-12-31)]
+    ns=nomy/2025-12-31/entity00117744, tag=InsuranceContractLiabilitiesWithParticipatingFeaturesOfInsur
+      val_mn=1539724, Sep, n_dim=1
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+    ns=nomy/2025-12-31/entity00117744, tag=InsuranceContractLiabilitiesWithoutParticipatingFeaturesOfIn
+      val_mn=22175987, Sep, n_dim=1
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+    ns=nomy/2025-12-31/entity00117744, tag=InsuranceContractLiabilitiesWithParticipatingFeaturesOfInsur
+      val_mn=1539724, Con, n_dim=1
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+    ns=nomy/2025-12-31/entity00117744, tag=InsuranceContractLiabilitiesWithoutParticipatingFeaturesOfIn
+      val_mn=22195966, Con, n_dim=1
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+
+  [TheCarryingAmount / BookValue 류 태그 (Sep 2025-12-31)]
+
+  [정답값 근사 탐색 (전체 태그, Sep 2025-12-31 instant, ±2%)]
+
+  BEL = 38011337백만원:
+    err=0.0099 | Liabilities
+      val_mn=38388473 | raw=38388473445768.0 | dec=0 | n_dim=1
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:SeparateMember
+
+  RA = 817895백만원:
+
+  CSM = 3413560백만원:
+
+======================================================================
+[KB손해보험]
+======================================================================
+
+  [dart 네임스페이스 BEL/RA/CSM 관련 태그 (Sep 2025-12-31)]
+    ns=nomy/2025-12-31/entity00120216, tag=InsuranceContractLiabilitiesWithParticipatingFeaturesOfInsur
+      val_mn=3501385000000, Sep, n_dim=1
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+    ns=nomy/2025-12-31/entity00120216, tag=InsuranceContractLiabilitiesWithParticipatingFeaturesOfInsur
+      val_mn=3501385000000, Con, n_dim=1
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+    ns=nomy/2025-12-31/entity00120216, tag=InsuranceContractLiabilitiesWithoutParticipatingFeaturesOfIn
+      val_mn=22766618000000, Con, n_dim=1
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+
+  [TheCarryingAmount / BookValue 류 태그 (Sep 2025-12-31)]
+
+  [정답값 근사 탐색 (전체 태그, Sep 2025-12-31 instant, ±2%)]
+
+  BEL = 39028451백만원:
+
+  RA = 812040백만원:
+
+  CSM = 3402947백만원:
+
+======================================================================
+[현대해상]
+======================================================================
+
+  [dart 네임스페이스 BEL/RA/CSM 관련 태그 (Sep 2025-12-31)]
+    ns=nomy/2025-12-31/entity00164973, tag=DeferredTaxLiabilityAssetNotRecognisedOfDisclosureOfTemporar
+      val_mn=9317, Sep, n_dim=1
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+    ns=nomy/2025-12-31/entity00164973, tag=InsuranceContractsLiabilityAndOtherLiabilitiesRelatedPartyTr
+      val_mn=0, Sep, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+      ifrs-full:CategoriesOfRelatedPartiesAxis = entity00164973:HyundaiInsuranceChinaCompanyLtdMemberOfAssociatesMemberOfDisclosureOfOutstandingBalancesForRelatedPartyTransactionsTableOfMember
+    ns=nomy/2025-12-31/entity00164973, tag=InsuranceContractsLiabilityAndOtherLiabilitiesRelatedPartyTr
+      val_mn=0, Sep, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+      ifrs-full:CategoriesOfRelatedPartiesAxis = ifrs-full:KeyManagementPersonnelOfEntityOrParentMember
+    ns=nomy/2025-12-31/entity00164973, tag=InsuranceContractsLiabilityAndOtherLiabilitiesRelatedPartyTr
+      val_mn=178083, Sep, n_dim=1
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+    ns=nomy/2025-12-31/entity00164973, tag=InsuranceContractsLiabilityAndOtherLiabilitiesRelatedPartyTr
+      val_mn=14901, Sep, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+      ifrs-full:CategoriesOfRelatedPartiesAxis = entity00164973:HyundaiCRIncMemberOfSubsidiariesMemberOfDisclosureOfOutstandingBalancesForRelatedPartyTransactionsTableOfMember
+    ns=nomy/2025-12-31/entity00164973, tag=InsuranceContractsLiabilityAndOtherLiabilitiesRelatedPartyTr
+      val_mn=86988, Sep, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+      ifrs-full:CategoriesOfRelatedPartiesAxis = entity00164973:HyundaiHicarClaimsServiceMemberOfSubsidiariesMemberOfDisclosureOfOutstandingBalancesForRelatedPartyTransactionsTableOfMember
+    ns=nomy/2025-12-31/entity00164973, tag=InsuranceContractsLiabilityAndOtherLiabilitiesRelatedPartyTr
+      val_mn=76194, Sep, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+      ifrs-full:CategoriesOfRelatedPartiesAxis = entity00164973:OtherSubsidiariesMemberOfSubsidiariesMemberOfDisclosureOfOutstandingBalancesForRelatedPartyTransactionsTableOfMember
+    ns=nomy/2025-12-31/entity00164973, tag=DeferredTaxLiabilityAssetNotRecognisedOfDisclosureOfTemporar
+      val_mn=56192, Con, n_dim=1
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+
+  [TheCarryingAmount / BookValue 류 태그 (Sep 2025-12-31)]
+
+  [정답값 근사 탐색 (전체 태그, Sep 2025-12-31 instant, ±2%)]
+
+  BEL = 43022017백만원:
+
+  RA = 873617백만원:
+    err=0.0004 | NominalAmountOfHedgingInstrument
+      val_mn=873271 | raw=873270840000.0 | dec=INF | n_dim=3
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:SeparateMember
+      ifrs-full:TypesOfHedgesAxis = ifrs-full:CashFlowHedgesMember
+      ifrs-full:MaturityAxis = ifrs-full:LaterThanFourYearsAndNotLaterThanFiveYearsMember
+    err=0.0020 | ExposureToRiskThatArisesFromContractsWithinScopeOfIFRS17
+      val_mn=871883 | raw=871882890357.0 | dec=0 | n_dim=4
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:SeparateMember
+      ifrs-full:TypesOfRisksAxis = ifrs-full:InsuranceRiskMember
+      ifrs-full:TypesOfContractsAxis = dart:GeneralInsuranceMember
+      ifrs-full:GeographicalAreasAxis = ifrs-full:CountryOfDomicileMember
+    err=0.0156 | InsuranceContractsThatAreAssets
+      val_mn=860031 | raw=860031189229.0 | dec=0 | n_dim=4
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:SeparateMember
+      ifrs-full:DisaggregationOfInsuranceContractsAxis = ifrs-full:ReinsuranceContractsHeldMember
+      ifrs-full:TypesOfContractsAxis = dart:GeneralInsuranceMember
+      ifrs-full:InsuranceContractsByRemainingCoverageAndIncurredCl = ifrs-full:EstimatesOfPresentValueOfFutureCashFlowsMember
+    err=0.0156 | InsuranceContractsThatAreAssets
+      val_mn=860031 | raw=860031189229.0 | dec=0 | n_dim=6
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:SeparateMember
+      ifrs-full:DisaggregationOfInsuranceContractsAxis = ifrs-full:ReinsuranceContractsHeldMember
+      ifrs-full:InsuranceContractsAxis = ifrs-full:InsuranceContractsOtherThanThoseToWhichPremiumAllocationApproachHasBeenAppliedMember
+      ifrs-full:InsuranceContractsByComponentsAxis = ifrs-full:EstimatesOfPresentValueOfFutureCashFlowsMember
+
+  CSM = 4490254백만원:
+    err=0.0001 | EstimateOfUndiscountedClaimsThatAriseFromContractsWithinScopeOfIFRS17
+      val_mn=4489965 | raw=4489964803592.0 | dec=0 | n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:SeparateMember
+      ifrs-full:TypesOfContractsAxis = dart:GeneralInsuranceMember
+    err=0.0104 | FinancialAssets
+      val_mn=4443513 | raw=4443512900974.0 | dec=0 | n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:SeparateMember
+      dart:ClassesOfIndustriesAxis = entity00164973:RetailMemberOfIndustriesMemberOfConcentrationOfCreditRiskByIndustriesTableOfMember
+    err=0.0104 | FinancialAssets
+      val_mn=4443513 | raw=4443512900974.0 | dec=0 | n_dim=3
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:SeparateMember
+      dart:ClassesOfIndustriesAxis = entity00164973:RetailMemberOfIndustriesMemberOfConcentrationOfCreditRiskByIndustriesTableOfMember
+      dart:BalancesheetAndOffbalancesheetAccountsAxis = ifrs-full:FinancialAssetsAtAmortisedCostCategoryMember
+    err=0.0166 | EstimateOfUndiscountedClaimsThatAriseFromContractsWithinScopeOfIFRS17O
+      val_mn=4564969 | raw=4564968688156.0 | dec=0 | n_dim=3
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:SeparateMember
+      ifrs-full:TypesOfContractsAxis = dart:LongtermInsuranceMember
+      ifrs-full:YearsOfInsuranceClaimAxis = ifrs-full:OneYearBeforeReportingYearMember
+    err=0.0175 | EstimateOfUndiscountedClaimsThatAriseFromContractsWithinScopeOfIFRS17T
+      val_mn=4411624 | raw=4411623932647.0 | dec=0 | n_dim=3
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:SeparateMember
+      ifrs-full:TypesOfContractsAxis = dart:LongtermInsuranceMember
+      ifrs-full:YearsOfInsuranceClaimAxis = ifrs-full:TwoYearsBeforeReportingYearMember
+
+======================================================================
+[DB손해보험]
+======================================================================
+
+  [dart 네임스페이스 BEL/RA/CSM 관련 태그 (Sep 2025-12-31)]
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=DerivativeAssetsBeforeCreditRiskAdjustment
+      val_mn=0, Con, n_dim=4
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      dart:DesignatedPurposeOfDerivativesAxis = dart:TradingPurposeMember
+      dart:DerivativeContractTypeAxis = dart:InterestRatesRelatedMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=DerivativeAssetsBeforeCreditRiskAdjustment
+      val_mn=0, Con, n_dim=4
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      dart:DesignatedPurposeOfDerivativesAxis = dart:TradingPurposeMember
+      dart:DerivativeContractTypeAxis = dart:InterestRatesRelatedMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=DerivativeAssetsBeforeCreditRiskAdjustment
+      val_mn=2549000000, Con, n_dim=4
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      dart:DesignatedPurposeOfDerivativesAxis = dart:TradingPurposeMember
+      dart:DerivativeContractTypeAxis = dart:EquityRelatedMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=DerivativeAssetsBeforeCreditRiskAdjustment
+      val_mn=0, Con, n_dim=4
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      dart:DesignatedPurposeOfDerivativesAxis = dart:TradingPurposeMember
+      dart:DerivativeContractTypeAxis = dart:ForeignCurrencyRelatedMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=DerivativeAssetsBeforeCreditRiskAdjustment
+      val_mn=276000000, Con, n_dim=4
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      dart:DesignatedPurposeOfDerivativesAxis = dart:TradingPurposeMember
+      dart:DerivativeContractTypeAxis = dart:ForeignCurrencyRelatedMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=DerivativeAssetsBeforeCreditRiskAdjustment
+      val_mn=2825000000, Con, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      dart:DesignatedPurposeOfDerivativesAxis = dart:TradingPurposeMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=DerivativeAssetsBeforeCreditRiskAdjustment
+      val_mn=64013000000, Con, n_dim=4
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      dart:DesignatedPurposeOfDerivativesAxis = ifrs-full:FairValueHedgesMember
+      dart:DerivativeContractTypeAxis = dart:ForeignCurrencyRelatedMember
+    ns=nomy/2025-12-31/entity00159102, tag=BestEstimateLiabilitiesRelatedPartyTransactionsOfLiabilities
+      val_mn=-2000000, Con, n_dim=1
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=RiskAdjustmentForNonFinancialRiskAboutLiabilitiesForIncurred
+      val_mn=22261000000, Con, n_dim=3
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      ifrs-full:TypesOfInsuranceContractsAxis = ifrs-full:NonlifeInsuranceContractsMember
+      ifrs-full:TypesOfContractsAxis = dart:AutomobileInsuranceMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=RiskAdjustmentForNonFinancialRiskAboutLiabilitiesForIncurred
+      val_mn=110492000000, Con, n_dim=3
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      ifrs-full:TypesOfInsuranceContractsAxis = ifrs-full:NonlifeInsuranceContractsMember
+      ifrs-full:TypesOfContractsAxis = dart:GeneralInsuranceMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=RiskAdjustmentForNonFinancialRiskAboutLiabilitiesForIncurred
+      val_mn=67627000000, Con, n_dim=3
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      ifrs-full:TypesOfInsuranceContractsAxis = ifrs-full:NonlifeInsuranceContractsMember
+      ifrs-full:TypesOfContractsAxis = dart:LongtermInsuranceMember
+    ns=nomy/2025-12-31/entity00159102, tag=BasisContractualServiceMarginDueToReasonablyPossibleIncrease
+      val_mn=1878044000000, Con, n_dim=4
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      ifrs-full:TypesOfRisksAxis = ifrs-full:InsuranceRiskMember
+      entity00159102:NatureOfInsuranceContractsAxisOfDis = entity00159102:NonDvidendInsuranceContractsMemberOfNatureOfInsuranceContractsMemberOfDisclosureOfSensitivityAnalysisToChangesInRiskExposuresThatAriseFromContractsWithinScopeOfIfrs17LifeInsuranceTableOfMember
+    ns=nomy/2025-12-31/entity00159102, tag=BasisContractualServiceMarginDueToReasonablyPossibleIncrease
+      val_mn=5313000000, Con, n_dim=4
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      ifrs-full:TypesOfRisksAxis = ifrs-full:InsuranceRiskMember
+      entity00159102:NatureOfInsuranceContractsAxisOfDis = entity00159102:DividendInsuranceContractsMemberOfNatureOfInsuranceContractsMemberOfDisclosureOfSensitivityAnalysisToChangesInRiskExposuresThatAriseFromContractsWithinScopeOfIfrs17LifeInsuranceTableOfMember
+    ns=nomy/2025-12-31/entity00159102, tag=BasisContractualServiceMarginDueToReasonablyPossibleIncrease
+      val_mn=97946000000, Con, n_dim=4
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      ifrs-full:TypesOfRisksAxis = ifrs-full:InsuranceRiskMember
+      entity00159102:NatureOfInsuranceContractsAxisOfDis = entity00159102:VariableInsuranceContractsMemberOfNatureOfInsuranceContractsMemberOfDisclosureOfSensitivityAnalysisToChangesInRiskExposuresThatAriseFromContractsWithinScopeOfIfrs17LifeInsuranceTableOfMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=RiskAdjustmentForNonFinancialRiskAboutLiabilitiesForIncurred
+      val_mn=2223000000, Con, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      ifrs-full:TypesOfInsuranceContractsAxis = ifrs-full:LifeInsuranceContractsMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=DerivativeLiabilitiesBeforeCreditRiskAdjustment
+      val_mn=382559000000, Con, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      dart:DesignatedPurposeOfDerivativesAxis = ifrs-full:FairValueHedgesMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=DerivativeLiabilitiesBeforeCreditRiskAdjustment
+      val_mn=545180000000, Con, n_dim=4
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      dart:DesignatedPurposeOfDerivativesAxis = ifrs-full:CashFlowHedgesMember
+      dart:DerivativeContractTypeAxis = dart:ForeignCurrencyRelatedMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=DerivativeLiabilitiesBeforeCreditRiskAdjustment
+      val_mn=1175769000000, Con, n_dim=4
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      dart:DesignatedPurposeOfDerivativesAxis = ifrs-full:CashFlowHedgesMember
+      dart:DerivativeContractTypeAxis = entity00159102:BondRelatedMemberOfDerivativeContractTypeMemberOfFairValuesOfDerivativeInstrumentsTableOfMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=DerivativeLiabilitiesBeforeCreditRiskAdjustment
+      val_mn=1720949000000, Con, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      dart:DesignatedPurposeOfDerivativesAxis = ifrs-full:CashFlowHedgesMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=DerivativeLiabilitiesBeforeCreditRiskAdjustment
+      val_mn=14619000000, Con, n_dim=4
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      dart:DesignatedPurposeOfDerivativesAxis = ifrs-full:HedgesOfNetInvestmentInForeignOperationsMember
+      dart:DerivativeContractTypeAxis = dart:ForeignCurrencyRelatedMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=DerivativeLiabilitiesBeforeCreditRiskAdjustment
+      val_mn=14619000000, Con, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      dart:DesignatedPurposeOfDerivativesAxis = ifrs-full:HedgesOfNetInvestmentInForeignOperationsMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=DerivativeLiabilitiesBeforeCreditRiskAdjustment
+      val_mn=2125554000000, Con, n_dim=1
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=AllowanceForOwnCreditRiskAdjustment
+      val_mn=-4988000000, Con, n_dim=1
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+    ns=nomy/2025-12-31/entity00159102, tag=BestEstimateLiabilitiesRelatedPartyTransactionsOfLiabilities
+      val_mn=0, Con, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      ifrs-full:CategoriesOfRelatedPartiesAxis = entity00159102:DbSecuritiesCoLtdMemberOfAssociatesMemberOfDisclosureOfOutstandingBalancesForRelatedPartyTransactionsTableOfMember
+    ns=nomy/2025-12-31/entity00159102, tag=BestEstimateLiabilitiesRelatedPartyTransactionsOfLiabilities
+      val_mn=-2000000, Con, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      ifrs-full:CategoriesOfRelatedPartiesAxis = entity00159102:DbIncMemberOfOtherRelatedPartiesMemberOfDisclosureOfOutstandingBalancesForRelatedPartyTransactionsTableOfMember
+    ns=nomy/2025-12-31/entity00159102, tag=BestEstimateLiabilitiesRelatedPartyTransactionsOfLiabilities
+      val_mn=0, Con, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      ifrs-full:CategoriesOfRelatedPartiesAxis = entity00159102:DbWorldCoLtdMemberOfOtherRelatedPartiesMemberOfDisclosureOfOutstandingBalancesForRelatedPartyTransactionsTableOfMember
+    ns=nomy/2025-12-31/entity00159102, tag=BestEstimateLiabilitiesRelatedPartyTransactionsOfLiabilities
+      val_mn=0, Con, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      ifrs-full:CategoriesOfRelatedPartiesAxis = entity00159102:DbHitekCoLtdMemberOfOtherRelatedPartiesMemberOfDisclosureOfOutstandingBalancesForRelatedPartyTransactionsTableOfMember
+    ns=nomy/2025-12-31/entity00159102, tag=BestEstimateLiabilitiesRelatedPartyTransactionsOfLiabilities
+      val_mn=0, Con, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      ifrs-full:CategoriesOfRelatedPartiesAxis = entity00159102:DbSavingsBankCoLtdMemberOfOtherRelatedPartiesMemberOfDisclosureOfOutstandingBalancesForRelatedPartyTransactionsTableOfMember
+    ns=nomy/2025-12-31/entity00159102, tag=BestEstimateLiabilitiesRelatedPartyTransactionsOfLiabilities
+      val_mn=0, Con, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      ifrs-full:CategoriesOfRelatedPartiesAxis = entity00159102:DbAssetManagementCoLtdMemberOfOtherRelatedPartiesMemberOfDisclosureOfOutstandingBalancesForRelatedPartyTransactionsTableOfMember
+    ns=nomy/2025-12-31/entity00159102, tag=BestEstimateLiabilitiesRelatedPartyTransactionsOfLiabilities
+      val_mn=0, Con, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      ifrs-full:CategoriesOfRelatedPartiesAxis = entity00159102:DbKimJunKiCulturalFoundationMemberOfOtherRelatedPartiesMemberOfDisclosureOfOutstandingBalancesForRelatedPartyTransactionsTableOfMember
+    ns=nomy/2025-12-31/entity00159102, tag=BestEstimateLiabilitiesRelatedPartyTransactionsOfLiabilities
+      val_mn=0, Con, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      ifrs-full:CategoriesOfRelatedPartiesAxis = entity00159102:DbGlobalChipCoLtdMemberOfOtherRelatedPartiesMemberOfDisclosureOfOutstandingBalancesForRelatedPartyTransactionsTableOfMember
+    ns=nomy/2025-12-31/entity00159102, tag=BestEstimateLiabilitiesRelatedPartyTransactionsOfLiabilities
+      val_mn=0, Con, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      ifrs-full:CategoriesOfRelatedPartiesAxis = entity00159102:BiltechCoLtdMemberOfOtherRelatedPartiesMemberOfDisclosureOfTransactionsBetweenRelatedPartiesTableOfMember
+    ns=nomy/2025-12-31/entity00159102, tag=BestEstimateLiabilitiesRelatedPartyTransactionsOfLiabilities
+      val_mn=0, Con, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      ifrs-full:CategoriesOfRelatedPartiesAxis = entity00159102:DbTechnologyAndOthersMemberOfOtherRelatedPartiesMemberOfDisclosureOfOutstandingBalancesForRelatedPartyTransactionsTableOfMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=RiskAdjustmentForNonFinancialRiskAboutLiabilitiesForIncurred
+      val_mn=22261000000, Sep, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+      ifrs-full:TypesOfContractsAxis = dart:AutomobileInsuranceMember
+    ns=nomy/2025-12-31/entity00159102, tag=BasisContractualServiceMarginDueToReasonablyPossibleIncrease
+      val_mn=12186886000000, Con, n_dim=5
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      ifrs-full:TypesOfRisksAxis = ifrs-full:InsuranceRiskMember
+      entity00159102:NatureOfInsuranceContractsAxisOfDis = entity00159102:NonDvidendInsuranceContractsMemberOfNatureOfInsuranceContractsMemberOfDisclosureOfSensitivityAnalysisToChangesInRiskExposuresThatAriseFromContractsWithinScopeOfIFRS17TableOfMember
+    ns=nomy/2025-12-31/entity00159102, tag=BasisContractualServiceMarginDueToReasonablyPossibleIncrease
+      val_mn=18455000000, Con, n_dim=5
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      ifrs-full:TypesOfRisksAxis = ifrs-full:InsuranceRiskMember
+      entity00159102:NatureOfInsuranceContractsAxisOfDis = entity00159102:DividendInsuranceContractsMemberOfNatureOfInsuranceContractsMemberOfDisclosureOfSensitivityAnalysisToChangesInRiskExposuresThatAriseFromContractsWithinScopeOfIFRS17TableOfMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=DerivativeAssetsBeforeCreditRiskAdjustment
+      val_mn=0, Sep, n_dim=4
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+      dart:DesignatedPurposeOfDerivativesAxis = dart:TradingPurposeMember
+      dart:DerivativeContractTypeAxis = dart:InterestRatesRelatedMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=DerivativeAssetsBeforeCreditRiskAdjustment
+      val_mn=0, Sep, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+      dart:DesignatedPurposeOfDerivativesAxis = dart:TradingPurposeMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=DerivativeAssetsBeforeCreditRiskAdjustment
+      val_mn=42334000000, Sep, n_dim=4
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+      dart:DesignatedPurposeOfDerivativesAxis = ifrs-full:FairValueHedgesMember
+      dart:DerivativeContractTypeAxis = dart:ForeignCurrencyRelatedMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=DerivativeAssetsBeforeCreditRiskAdjustment
+      val_mn=42334000000, Sep, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+      dart:DesignatedPurposeOfDerivativesAxis = ifrs-full:FairValueHedgesMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=DerivativeAssetsBeforeCreditRiskAdjustment
+      val_mn=6050000000, Sep, n_dim=4
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+      dart:DesignatedPurposeOfDerivativesAxis = ifrs-full:CashFlowHedgesMember
+      dart:DerivativeContractTypeAxis = dart:ForeignCurrencyRelatedMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=DerivativeAssetsBeforeCreditRiskAdjustment
+      val_mn=16207000000, Sep, n_dim=4
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+      dart:DesignatedPurposeOfDerivativesAxis = ifrs-full:CashFlowHedgesMember
+      dart:DerivativeContractTypeAxis = entity00159102:BondRelatedMemberOfDerivativeContractTypeMemberOfFairValuesOfDerivativeInstrumentsTableOfMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=DerivativeAssetsBeforeCreditRiskAdjustment
+      val_mn=22257000000, Sep, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+      dart:DesignatedPurposeOfDerivativesAxis = ifrs-full:CashFlowHedgesMember
+    ns=nomy/2025-12-31/entity00159102, tag=BestEstimateLiabilitiesRelatedPartyTransactionsOfLiabilities
+      val_mn=0, Sep, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+      ifrs-full:CategoriesOfRelatedPartiesAxis = entity00159102:JohnMullenCoIncMemberOfSubsidiariesMemberOfDisclosureOfOutstandingBalancesForRelatedPartyTransactionsTableOfMember
+    ns=nomy/2025-12-31/entity00159102, tag=BestEstimateLiabilitiesRelatedPartyTransactionsOfLiabilities
+      val_mn=0, Sep, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+      ifrs-full:CategoriesOfRelatedPartiesAxis = entity00159102:DbSecuritiesCoLtdMemberOfAssociatesMemberOfDisclosureOfOutstandingBalancesForRelatedPartyTransactionsTableOfMember
+    ns=nomy/2025-12-31/entity00159102, tag=BestEstimateLiabilitiesRelatedPartyTransactionsOfLiabilities
+      val_mn=0, Sep, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+      ifrs-full:CategoriesOfRelatedPartiesAxis = entity00159102:DbAssetManagementCoLtdMemberOfOtherRelatedPartiesMemberOfDisclosureOfOutstandingBalancesForRelatedPartyTransactionsTableOfMember
+    ns=nomy/2025-12-31/entity00159102, tag=BestEstimateLiabilitiesRelatedPartyTransactionsOfLiabilities
+      val_mn=-2000000, Sep, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+      ifrs-full:CategoriesOfRelatedPartiesAxis = entity00159102:DbIncMemberOfOtherRelatedPartiesMemberOfDisclosureOfOutstandingBalancesForRelatedPartyTransactionsTableOfMember
+    ns=nomy/2025-12-31/entity00159102, tag=BestEstimateLiabilitiesRelatedPartyTransactionsOfLiabilities
+      val_mn=0, Sep, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+      ifrs-full:CategoriesOfRelatedPartiesAxis = entity00159102:BiltechCoLtdMemberOfOtherRelatedPartiesMemberOfDisclosureOfTransactionsBetweenRelatedPartiesTableOfMember
+    ns=nomy/2025-12-31/entity00159102, tag=BestEstimateLiabilitiesRelatedPartyTransactionsOfLiabilities
+      val_mn=0, Sep, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+      ifrs-full:CategoriesOfRelatedPartiesAxis = entity00159102:DbHitekCoLtdAndOthersMemberOfOtherRelatedPartiesMemberOfDisclosureOfOutstandingBalancesForRelatedPartyTransactionsTableOfMember
+    ns=nomy/2025-12-31/entity00159102, tag=BestEstimateLiabilitiesRelatedPartyTransactionsOfLiabilities
+      val_mn=-2000000, Sep, n_dim=1
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+    ns=nomy/2025-12-31/entity00159102, tag=BasisContractualServiceMarginDueToReasonablyPossibleIncrease
+      val_mn=12186886000000, Sep, n_dim=4
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+      ifrs-full:TypesOfRisksAxis = ifrs-full:InsuranceRiskMember
+      entity00159102:NatureOfInsuranceContractsAxisOfDis = entity00159102:NonDvidendInsuranceContractsMemberOfNatureOfInsuranceContractsMemberOfDisclosureOfSensitivityAnalysisToChangesInRiskExposuresThatAriseFromContractsWithinScopeOfIFRS17TableOfMember
+    ns=nomy/2025-12-31/entity00159102, tag=BasisContractualServiceMarginDueToReasonablyPossibleIncrease
+      val_mn=18455000000, Sep, n_dim=4
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+      ifrs-full:TypesOfRisksAxis = ifrs-full:InsuranceRiskMember
+      entity00159102:NatureOfInsuranceContractsAxisOfDis = entity00159102:DividendInsuranceContractsMemberOfNatureOfInsuranceContractsMemberOfDisclosureOfSensitivityAnalysisToChangesInRiskExposuresThatAriseFromContractsWithinScopeOfIFRS17TableOfMember
+    ns=nomy/2025-12-31/entity00159102, tag=BasisContractualServiceMarginDueToReasonablyPossibleIncrease
+      val_mn=1878044000000, Con, n_dim=4
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      ifrs-full:TypesOfRisksAxis = ifrs-full:InsuranceRiskMember
+      entity00159102:NatureOfInsuranceContractsAxisOfDis = entity00159102:NonDvidendInsuranceContractsMemberOfNatureOfInsuranceContractsMemberOfDisclosureOfSensitivityAnalysisToChangesInRiskExposuresThatAriseFromContractsWithinScopeOfIfrs17LifeInsuranceTableOfMember
+    ns=nomy/2025-12-31/entity00159102, tag=BasisContractualServiceMarginDueToReasonablyPossibleIncrease
+      val_mn=5313000000, Con, n_dim=4
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      ifrs-full:TypesOfRisksAxis = ifrs-full:InsuranceRiskMember
+      entity00159102:NatureOfInsuranceContractsAxisOfDis = entity00159102:DividendInsuranceContractsMemberOfNatureOfInsuranceContractsMemberOfDisclosureOfSensitivityAnalysisToChangesInRiskExposuresThatAriseFromContractsWithinScopeOfIfrs17LifeInsuranceTableOfMember
+    ns=nomy/2025-12-31/entity00159102, tag=BasisContractualServiceMarginDueToReasonablyPossibleIncrease
+      val_mn=97946000000, Con, n_dim=4
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      ifrs-full:TypesOfRisksAxis = ifrs-full:InsuranceRiskMember
+      entity00159102:NatureOfInsuranceContractsAxisOfDis = entity00159102:VariableInsuranceContractsMemberOfNatureOfInsuranceContractsMemberOfDisclosureOfSensitivityAnalysisToChangesInRiskExposuresThatAriseFromContractsWithinScopeOfIfrs17LifeInsuranceTableOfMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=DerivativeAssetsBeforeCreditRiskAdjustment
+      val_mn=64591000000, Sep, n_dim=1
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=AllowanceForCreditRiskAdjustment
+      val_mn=-34000000, Sep, n_dim=1
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=DerivativeLiabilitiesBeforeCreditRiskAdjustment
+      val_mn=0, Sep, n_dim=4
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+      dart:DesignatedPurposeOfDerivativesAxis = dart:TradingPurposeMember
+      dart:DerivativeContractTypeAxis = dart:InterestRatesRelatedMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=DerivativeLiabilitiesBeforeCreditRiskAdjustment
+      val_mn=0, Sep, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+      dart:DesignatedPurposeOfDerivativesAxis = dart:TradingPurposeMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=DerivativeLiabilitiesBeforeCreditRiskAdjustment
+      val_mn=157500000000, Sep, n_dim=4
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+      dart:DesignatedPurposeOfDerivativesAxis = ifrs-full:FairValueHedgesMember
+      dart:DerivativeContractTypeAxis = dart:ForeignCurrencyRelatedMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=DerivativeLiabilitiesBeforeCreditRiskAdjustment
+      val_mn=157500000000, Sep, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+      dart:DesignatedPurposeOfDerivativesAxis = ifrs-full:FairValueHedgesMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=DerivativeLiabilitiesBeforeCreditRiskAdjustment
+      val_mn=310027000000, Sep, n_dim=4
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+      dart:DesignatedPurposeOfDerivativesAxis = ifrs-full:CashFlowHedgesMember
+      dart:DerivativeContractTypeAxis = dart:ForeignCurrencyRelatedMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=DerivativeLiabilitiesBeforeCreditRiskAdjustment
+      val_mn=975617000000, Sep, n_dim=4
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+      dart:DesignatedPurposeOfDerivativesAxis = ifrs-full:CashFlowHedgesMember
+      dart:DerivativeContractTypeAxis = entity00159102:BondRelatedMemberOfDerivativeContractTypeMemberOfFairValuesOfDerivativeInstrumentsTableOfMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=DerivativeLiabilitiesBeforeCreditRiskAdjustment
+      val_mn=1285644000000, Sep, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+      dart:DesignatedPurposeOfDerivativesAxis = ifrs-full:CashFlowHedgesMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=DerivativeLiabilitiesBeforeCreditRiskAdjustment
+      val_mn=1443144000000, Sep, n_dim=1
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=AllowanceForOwnCreditRiskAdjustment
+      val_mn=0, Sep, n_dim=1
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=RiskAdjustmentForNonFinancialRiskAboutLiabilitiesForIncurred
+      val_mn=67627000000, Sep, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+      ifrs-full:TypesOfContractsAxis = dart:LongtermInsuranceMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=RiskAdjustmentForNonFinancialRiskAboutLiabilitiesForIncurred
+      val_mn=110492000000, Sep, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+      ifrs-full:TypesOfContractsAxis = dart:GeneralInsuranceMember
+    ns=nomy/2025-12-31/entity00159102, tag=NonControllingInterestsClassifiedAsLiabilityOfOtherFinancial
+      val_mn=961136000000, Con, n_dim=1
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=DerivativeAssetsBeforeCreditRiskAdjustment
+      val_mn=64013000000, Con, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      dart:DesignatedPurposeOfDerivativesAxis = ifrs-full:FairValueHedgesMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=DerivativeAssetsBeforeCreditRiskAdjustment
+      val_mn=10800000000, Con, n_dim=4
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      dart:DesignatedPurposeOfDerivativesAxis = ifrs-full:CashFlowHedgesMember
+      dart:DerivativeContractTypeAxis = dart:ForeignCurrencyRelatedMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=DerivativeAssetsBeforeCreditRiskAdjustment
+      val_mn=27054000000, Con, n_dim=4
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      dart:DesignatedPurposeOfDerivativesAxis = ifrs-full:CashFlowHedgesMember
+      dart:DerivativeContractTypeAxis = entity00159102:BondRelatedMemberOfDerivativeContractTypeMemberOfFairValuesOfDerivativeInstrumentsTableOfMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=DerivativeAssetsBeforeCreditRiskAdjustment
+      val_mn=37854000000, Con, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      dart:DesignatedPurposeOfDerivativesAxis = ifrs-full:CashFlowHedgesMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=DerivativeAssetsBeforeCreditRiskAdjustment
+      val_mn=37000000, Con, n_dim=4
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      dart:DesignatedPurposeOfDerivativesAxis = ifrs-full:HedgesOfNetInvestmentInForeignOperationsMember
+      dart:DerivativeContractTypeAxis = dart:ForeignCurrencyRelatedMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=DerivativeAssetsBeforeCreditRiskAdjustment
+      val_mn=37000000, Con, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      dart:DesignatedPurposeOfDerivativesAxis = ifrs-full:HedgesOfNetInvestmentInForeignOperationsMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=DerivativeAssetsBeforeCreditRiskAdjustment
+      val_mn=104729000000, Con, n_dim=1
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=AllowanceForCreditRiskAdjustment
+      val_mn=-34000000, Con, n_dim=1
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=DerivativeLiabilitiesBeforeCreditRiskAdjustment
+      val_mn=0, Con, n_dim=4
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      dart:DesignatedPurposeOfDerivativesAxis = dart:TradingPurposeMember
+      dart:DerivativeContractTypeAxis = dart:InterestRatesRelatedMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=DerivativeLiabilitiesBeforeCreditRiskAdjustment
+      val_mn=0, Con, n_dim=4
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      dart:DesignatedPurposeOfDerivativesAxis = dart:TradingPurposeMember
+      dart:DerivativeContractTypeAxis = dart:InterestRatesRelatedMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=DerivativeLiabilitiesBeforeCreditRiskAdjustment
+      val_mn=2199000000, Con, n_dim=4
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      dart:DesignatedPurposeOfDerivativesAxis = dart:TradingPurposeMember
+      dart:DerivativeContractTypeAxis = dart:EquityRelatedMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=DerivativeLiabilitiesBeforeCreditRiskAdjustment
+      val_mn=0, Con, n_dim=4
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      dart:DesignatedPurposeOfDerivativesAxis = dart:TradingPurposeMember
+      dart:DerivativeContractTypeAxis = dart:ForeignCurrencyRelatedMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=DerivativeLiabilitiesBeforeCreditRiskAdjustment
+      val_mn=5228000000, Con, n_dim=4
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      dart:DesignatedPurposeOfDerivativesAxis = dart:TradingPurposeMember
+      dart:DerivativeContractTypeAxis = dart:ForeignCurrencyRelatedMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=DerivativeLiabilitiesBeforeCreditRiskAdjustment
+      val_mn=7427000000, Con, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      dart:DesignatedPurposeOfDerivativesAxis = dart:TradingPurposeMember
+    ns=/taxonomy/2024-06-30/ifrs/dart, tag=DerivativeLiabilitiesBeforeCreditRiskAdjustment
+      val_mn=382559000000, Con, n_dim=4
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      dart:DesignatedPurposeOfDerivativesAxis = ifrs-full:FairValueHedgesMember
+      dart:DerivativeContractTypeAxis = dart:ForeignCurrencyRelatedMember
+    ns=nomy/2025-12-31/entity00159102, tag=BasisContractualServiceMarginDueToReasonablyPossibleIncrease
+      val_mn=12183373000000, Con, n_dim=5
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      ifrs-full:TypesOfRisksAxis = ifrs-full:InsuranceRiskMember
+      entity00159102:NatureOfInsuranceContractsAxisOfDis = entity00159102:NonDvidendInsuranceContractsMemberOfNatureOfInsuranceContractsMemberOfDisclosureOfSensitivityAnalysisToChangesInRiskExposuresThatAriseFromContractsWithinScopeOfIFRS17TableOfMember
+    ns=nomy/2025-12-31/entity00159102, tag=BasisContractualServiceMarginDueToReasonablyPossibleIncrease
+      val_mn=17720000000, Con, n_dim=5
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:ConsolidatedMember
+      ifrs-full:TypesOfRisksAxis = ifrs-full:InsuranceRiskMember
+      entity00159102:NatureOfInsuranceContractsAxisOfDis = entity00159102:DividendInsuranceContractsMemberOfNatureOfInsuranceContractsMemberOfDisclosureOfSensitivityAnalysisToChangesInRiskExposuresThatAriseFromContractsWithinScopeOfIFRS17TableOfMember
+    ns=nomy/2025-12-31/entity00159102, tag=BasisContractualServiceMarginDueToReasonablyPossibleIncrease
+      val_mn=12183373000000, Sep, n_dim=4
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+      ifrs-full:TypesOfRisksAxis = ifrs-full:InsuranceRiskMember
+      entity00159102:NatureOfInsuranceContractsAxisOfDis = entity00159102:NonDvidendInsuranceContractsMemberOfNatureOfInsuranceContractsMemberOfDisclosureOfSensitivityAnalysisToChangesInRiskExposuresThatAriseFromContractsWithinScopeOfIFRS17TableOfMember
+    ns=nomy/2025-12-31/entity00159102, tag=BasisContractualServiceMarginDueToReasonablyPossibleIncrease
+      val_mn=17720000000, Sep, n_dim=4
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+      ifrs-full:TypesOfRisksAxis = ifrs-full:InsuranceRiskMember
+      entity00159102:NatureOfInsuranceContractsAxisOfDis = entity00159102:DividendInsuranceContractsMemberOfNatureOfInsuranceContractsMemberOfDisclosureOfSensitivityAnalysisToChangesInRiskExposuresThatAriseFromContractsWithinScopeOfIFRS17TableOfMember
+    ns=nomy/2025-12-31/entity00159102, tag=BestEstimateLiabilitiesRelatedPartyTransactionsOfLiabilities
+      val_mn=0, Sep, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+      ifrs-full:CategoriesOfRelatedPartiesAxis = entity00159102:DbLifeInsuranceCoLtdMemberOfSubsidiariesMemberOfDisclosureOfOutstandingBalancesForRelatedPartyTransactionsTableOfMember
+    ns=nomy/2025-12-31/entity00159102, tag=BestEstimateLiabilitiesRelatedPartyTransactionsOfLiabilities
+      val_mn=0, Sep, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+      ifrs-full:CategoriesOfRelatedPartiesAxis = entity00159102:DbCapitalCoLtdMemberOfSubsidiariesMemberOfDisclosureOfOutstandingBalancesForRelatedPartyTransactionsTableOfMember
+    ns=nomy/2025-12-31/entity00159102, tag=BestEstimateLiabilitiesRelatedPartyTransactionsOfLiabilities
+      val_mn=0, Sep, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+      ifrs-full:CategoriesOfRelatedPartiesAxis = entity00159102:DbAutoInsuranceAdjustingCoLtdMemberOfSubsidiariesMemberOfDisclosureOfOutstandingBalancesForRelatedPartyTransactionsTableOfMember
+    ns=nomy/2025-12-31/entity00159102, tag=BestEstimateLiabilitiesRelatedPartyTransactionsOfLiabilities
+      val_mn=0, Sep, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+      ifrs-full:CategoriesOfRelatedPartiesAxis = entity00159102:DbCasAdjustingCoLtdMemberOfSubsidiariesMemberOfDisclosureOfOutstandingBalancesForRelatedPartyTransactionsTableOfMember
+    ns=nomy/2025-12-31/entity00159102, tag=BestEstimateLiabilitiesRelatedPartyTransactionsOfLiabilities
+      val_mn=0, Sep, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+      ifrs-full:CategoriesOfRelatedPartiesAxis = entity00159102:DbCsiAdjustingCoLtdMemberOfSubsidiariesMemberOfDisclosureOfOutstandingBalancesForRelatedPartyTransactionsTableOfMember
+    ns=nomy/2025-12-31/entity00159102, tag=BestEstimateLiabilitiesRelatedPartyTransactionsOfLiabilities
+      val_mn=0, Sep, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+      ifrs-full:CategoriesOfRelatedPartiesAxis = entity00159102:DbCnsAutoAdjustingCoLtdMemberOfSubsidiariesMemberOfDisclosureOfOutstandingBalancesForRelatedPartyTransactionsTableOfMember
+    ns=nomy/2025-12-31/entity00159102, tag=BestEstimateLiabilitiesRelatedPartyTransactionsOfLiabilities
+      val_mn=0, Sep, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+      ifrs-full:CategoriesOfRelatedPartiesAxis = entity00159102:DbMnsCoLtdMemberOfSubsidiariesMemberOfDisclosureOfOutstandingBalancesForRelatedPartyTransactionsTableOfMember
+    ns=nomy/2025-12-31/entity00159102, tag=BestEstimateLiabilitiesRelatedPartyTransactionsOfLiabilities
+      val_mn=0, Sep, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatemen = ifrs-full:SeparateMember
+      ifrs-full:CategoriesOfRelatedPartiesAxis = entity00159102:DbFinancialServiceCoLtdMemberOfSubsidiariesMemberOfDisclosureOfOutstandingBalancesForRelatedPartyTransactionsTableOfMember
+
+  [TheCarryingAmount / BookValue 류 태그 (Sep 2025-12-31)]
+    tag=CarryingAmountOfRelatedPortfoliosOfContractsRelatedToAmountsPayableOnDemandThatA
+      val_mn=24704701000000, Sep, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:SeparateMember
+      ifrs-full:TypesOfContractsAxis = dart:LongtermInsuranceMember
+    tag=CarryingAmountOfRelatedPortfoliosOfContractsRelatedToAmountsPayableOnDemandThatA
+      val_mn=2866819000000, Sep, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:SeparateMember
+      ifrs-full:TypesOfContractsAxis = dart:GeneralInsuranceMember
+    tag=CarryingAmountOfRelatedPortfoliosOfContractsRelatedToAmountsPayableOnDemandThatA
+      val_mn=3243304000000, Sep, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:SeparateMember
+      ifrs-full:TypesOfContractsAxis = dart:AutomobileInsuranceMember
+    tag=CarryingAmountOfRelatedPortfoliosOfContractsRelatedToAmountsPayableOnDemandThatA
+      val_mn=30814824000000, Sep, n_dim=1
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:SeparateMember
+    tag=CarryingAmountOfRelatedPortfoliosOfContractsRelatedToAmountsPayableOnDemandThatA
+      val_mn=39904796000000, Con, n_dim=1
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:ConsolidatedMember
+    tag=CarryingAmountOfRelatedPortfoliosOfContractsRelatedToAmountsPayableOnDemandThatA
+      val_mn=8811489000000, Con, n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:ConsolidatedMember
+      ifrs-full:TypesOfInsuranceContractsAxis = ifrs-full:LifeInsuranceContractsMember
+    tag=CarryingAmountOfRelatedPortfoliosOfContractsRelatedToAmountsPayableOnDemandThatA
+      val_mn=3243304000000, Con, n_dim=3
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:ConsolidatedMember
+      ifrs-full:TypesOfInsuranceContractsAxis = ifrs-full:NonlifeInsuranceContractsMember
+      ifrs-full:TypesOfContractsAxis = dart:AutomobileInsuranceMember
+    tag=CarryingAmountOfRelatedPortfoliosOfContractsRelatedToAmountsPayableOnDemandThatA
+      val_mn=3145302000000, Con, n_dim=3
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:ConsolidatedMember
+      ifrs-full:TypesOfInsuranceContractsAxis = ifrs-full:NonlifeInsuranceContractsMember
+      ifrs-full:TypesOfContractsAxis = dart:GeneralInsuranceMember
+    tag=CarryingAmountOfRelatedPortfoliosOfContractsRelatedToAmountsPayableOnDemandThatA
+      val_mn=24704701000000, Con, n_dim=3
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:ConsolidatedMember
+      ifrs-full:TypesOfInsuranceContractsAxis = ifrs-full:NonlifeInsuranceContractsMember
+      ifrs-full:TypesOfContractsAxis = dart:LongtermInsuranceMember
+
+  [정답값 근사 탐색 (전체 태그, Sep 2025-12-31 instant, ±2%)]
+
+  BEL = 52738440백만원:
+    err=0.0050 | IntangibleAssetsOtherThanGoodwill
+      val_mn=53000000 | raw=53000000.0 | dec=-6 | n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:SeparateMember
+      ifrs-full:ClassesOfIntangibleAssetsOtherThanGoodwillAxis = ifrs-full:OtherIntangibleAssetsMember
+    err=0.0140 | ContractualServiceMargin
+      val_mn=52000000 | raw=52000000.0 | dec=-6 | n_dim=5
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:SeparateMember
+      ifrs-full:DisaggregationOfInsuranceContractsAxis = ifrs-full:InsuranceContractsIssuedMember
+      ifrs-full:InsuranceContractsAxis = ifrs-full:InsuranceContractsOtherThanThoseToWhichPremiumAllocationApproachHasBeenAppliedMember
+      ifrs-full:TypesOfContractsAxis = entity00159102:NonDividendPensionSavingsInsuranceIparMemberOfIndirectParticipatingContractMemberOfDisclosureOfInformationAboutExpectedRecognitionOfContractualServiceMarginInProfitOrLossTableOfMember
+    err=0.0140 | OtherFinancialAssetsAtAmortisedCost
+      val_mn=52000000 | raw=52000000.0 | dec=-6 | n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:SeparateMember
+      ifrs-full:ClassesOfFinancialAssetsAxis = entity00159102:NotesReceivableMemberOfFinancialAssetsClassMemberOfDetailsOfOtherFinancialAssetsAtAmortisedCostTableOfMember
+
+  RA = 1058497백만원:
+
+  CSM = 3983500백만원:
+    err=0.0041 | OtherDepositsSpecialAccountOfDetailsOfDepositsAtAmortisedCostLineitems
+      val_mn=4000000 | raw=4000000.0 | dec=-6 | n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:SeparateMember
+      dart:FinancialInstrumentsByCurrencyAxis = dart:KRWMember
+    err=0.0041 | RestrictedFinancialAssets
+      val_mn=4000000 | raw=4000000.0 | dec=-6 | n_dim=2
+      ifrs-full:ConsolidatedAndSeparateFinancialStatementsAxis = ifrs-full:SeparateMember
+      dart:RestrictedFinancialAssetAxis = dart:OtherDepositsMember
