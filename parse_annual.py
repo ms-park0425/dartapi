@@ -208,12 +208,18 @@ INSURANCE_COMPONENT_MAPPING = {
 }
 
 
-def parse_actuarial_sensitivity(xbrl_path, target_year="2025"):
+def parse_actuarial_sensitivity(xbrl_path, target_year="2025", ref_date=None, start_date=None):
     """
     계리적 가정 변경 민감도 분석 파싱.
     3-dim duration: Separate + InsuranceContractsIssuedMember + BEL or CSM component
     반환: {(col, component): value_won}
     """
+    import calendar as _cal
+    if ref_date is None:
+        ref_date = f"{target_year}-12-31"
+    if start_date is None:
+        start_date = f"{target_year}-01-01"
+
     tree = ET.parse(xbrl_path)
     root = tree.getroot()
 
@@ -231,9 +237,9 @@ def parse_actuarial_sensitivity(xbrl_path, target_year="2025"):
         period = ctx.find(f"{{{NS_XBRLI}}}period")
         start = period.find(f"{{{NS_XBRLI}}}startDate")
         end = period.find(f"{{{NS_XBRLI}}}endDate")
-        if start is None or start.text != f"{target_year}-01-01":
+        if start is None or start.text != start_date:
             continue
-        if end is None or end.text != f"{target_year}-12-31":
+        if end is None or end.text != ref_date:
             continue
         members = ctx.findall(f".//{{{NS_XBRLDI}}}explicitMember")
         dims = {}
@@ -289,7 +295,7 @@ def parse_actuarial_sensitivity(xbrl_path, target_year="2025"):
         start = period.find(f"{{{NS_XBRLI}}}startDate")
         end = period.find(f"{{{NS_XBRLI}}}endDate")
         if start is None or end is None: continue
-        if start.text != f"{target_year}-01-01" or end.text != f"{target_year}-12-31": continue
+        if start.text != start_date or end.text != ref_date: continue
         members = ctx.findall(f".//{{{NS_XBRLDI}}}explicitMember")
         dims = {}
         for m in members:
@@ -445,12 +451,16 @@ def parse_prior_csm(xbrl_path, target_year="2025"):
     return None
 
 
-def parse_fvoci_oci(xbrl_path, target_year="2025"):
+def parse_fvoci_oci(xbrl_path, target_year="2025", ref_date=None, start_date=None):
     """
     FVOCI 금융자산 평가손익 OCI 파싱. 여러 context 패턴 지원:
     1. 2-dim (Separate + ReportedAmountMember) + dart_ChangesInOtherComprehensiveIncome...
     2. 2-dim (Separate + AccumulatedOtherComprehensiveIncomeMember) + ifrs-full_...ChangeInFairValue...
     """
+    if ref_date is None:
+        ref_date = f"{target_year}-12-31"
+    if start_date is None:
+        start_date = f"{target_year}-01-01"
     tree = ET.parse(xbrl_path)
     root = tree.getroot()
 
@@ -465,9 +475,9 @@ def parse_fvoci_oci(xbrl_path, target_year="2025"):
         period = ctx.find(f"{{{NS_XBRLI}}}period")
         start = period.find(f"{{{NS_XBRLI}}}startDate")
         end = period.find(f"{{{NS_XBRLI}}}endDate")
-        if start is None or start.text != f"{target_year}-01-01":
+        if start is None or start.text != start_date:
             continue
-        if end is None or end.text != f"{target_year}-12-31":
+        if end is None or end.text != ref_date:
             continue
         members = ctx.findall(f".//{{{NS_XBRLDI}}}explicitMember")
         if len(members) != 2:
@@ -505,16 +515,20 @@ def parse_fvoci_oci(xbrl_path, target_year="2025"):
     return None
 
 
-def parse_oci_accumulated(xbrl_path, target_year="2025"):
+def parse_oci_accumulated(xbrl_path, target_year="2025", ref_date=None):
     """
     OCI 누계 항목 파싱. 두 가지 구조 지원:
     - 패턴A (미래에셋): 3-dim (Separate + OtherComprehensiveIncomeLossAccumulatedAmountMember + entity-specific), tag=Equity
     - 패턴B (삼성생명): 2-dim (Separate + ComponentsOfEquityAxis member), tag=OtherComprehensiveIncomeLossAccumulatedAmount
     반환: {"cur": {keyword: value_won}, "prior": {keyword: value_won}}
     """
+    if ref_date is None:
+        ref_date = f"{target_year}-12-31"
+    prev_year = str(int(target_year) - 1)
+    prior_date = f"{prev_year}-12-31"
+
     tree = ET.parse(xbrl_path)
     root = tree.getroot()
-    prev_year = str(int(target_year) - 1)
 
     result = {"cur": {}, "prior": {}}
 
@@ -524,9 +538,9 @@ def parse_oci_accumulated(xbrl_path, target_year="2025"):
         instant = period.find(f"{{{NS_XBRLI}}}instant")
         if instant is None:
             continue
-        if instant.text == f"{target_year}-12-31":
+        if instant.text == ref_date:
             bucket = "cur"
-        elif instant.text == f"{prev_year}-12-31":
+        elif instant.text == prior_date:
             bucket = "prior"
         else:
             continue
@@ -604,11 +618,15 @@ def parse_oci_accumulated(xbrl_path, target_year="2025"):
     return result
 
 
-def parse_csm_movement(xbrl_path, target_year="2025"):
+def parse_csm_movement(xbrl_path, target_year="2025", ref_date=None, start_date=None):
     """
     CSM 변동 항목 파싱. 여러 dim 구조 지원 (5-dim, 4-dim, 3-dim, 2-dim).
     반환: {tag_local_name: total_value_won}
     """
+    if ref_date is None:
+        ref_date = f"{target_year}-12-31"
+    if start_date is None:
+        start_date = f"{target_year}-01-01"
     tree = ET.parse(xbrl_path)
     root = tree.getroot()
 
@@ -639,8 +657,8 @@ def parse_csm_movement(xbrl_path, target_year="2025"):
         period = ctx.find(f"{{{NS_XBRLI}}}period")
         start = period.find(f"{{{NS_XBRLI}}}startDate")
         end = period.find(f"{{{NS_XBRLI}}}endDate")
-        if start is None or start.text != f"{target_year}-01-01": continue
-        if end is None or end.text != f"{target_year}-12-31": continue
+        if start is None or start.text != start_date: continue
+        if end is None or end.text != ref_date: continue
         members = ctx.findall(f".//{{{NS_XBRLDI}}}explicitMember")
         dims = {m.get("dimension", "").split(":")[-1]: (m.text or "").split(":")[-1] for m in members}
         if "SeparateMember" != dims.get("ConsolidatedAndSeparateFinancialStatementsAxis", ""): continue
@@ -672,8 +690,8 @@ def parse_csm_movement(xbrl_path, target_year="2025"):
         period = ctx.find(f"{{{NS_XBRLI}}}period")
         start = period.find(f"{{{NS_XBRLI}}}startDate")
         end = period.find(f"{{{NS_XBRLI}}}endDate")
-        if start is None or start.text != f"{target_year}-01-01": continue
-        if end is None or end.text != f"{target_year}-12-31": continue
+        if start is None or start.text != start_date: continue
+        if end is None or end.text != ref_date: continue
         members = ctx.findall(f".//{{{NS_XBRLDI}}}explicitMember")
         dims = {m.get("dimension", "").split(":")[-1]: (m.text or "").split(":")[-1] for m in members}
         if "SeparateMember" != dims.get("ConsolidatedAndSeparateFinancialStatementsAxis", ""): continue
@@ -713,8 +731,8 @@ def parse_csm_movement(xbrl_path, target_year="2025"):
         period = ctx.find(f"{{{NS_XBRLI}}}period")
         start = period.find(f"{{{NS_XBRLI}}}startDate")
         end = period.find(f"{{{NS_XBRLI}}}endDate")
-        if start is None or start.text != f"{target_year}-01-01": continue
-        if end is None or end.text != f"{target_year}-12-31": continue
+        if start is None or start.text != start_date: continue
+        if end is None or end.text != ref_date: continue
         ctx_id = ctx.get("id", "")
         members = ctx.findall(f".//{{{NS_XBRLDI}}}explicitMember")
         dims_t = {m.get("dimension", "").split(":")[-1]: (m.text or "").split(":")[-1] for m in members}
@@ -844,29 +862,98 @@ def parse_csm_movement(xbrl_path, target_year="2025"):
 
 
 def find_xbrl_file(corp_name, report_type="사업보고서", year="2025"):
-    """XBRL 파일 경로 찾기"""
+    """XBRL 파일 경로 찾기. 없으면 DART API에서 자동 다운로드."""
     base = os.path.join("data", corp_name, report_type, year)
     files = glob(os.path.join(base, "*.xbrl"))
-    return files[0] if files else None
+    if files:
+        return files[0]
+
+    # 자동 다운로드
+    corp_code = ALL_CORP_CODES.get(corp_name)
+    if not corp_code:
+        return None
+    try:
+        from dart_api import get_disclosures, download_xbrl
+        reprt_code_map = {"사업보고서": "11011", "반기보고서": "11012",
+                          "1분기보고서": "11013", "3분기보고서": "11014"}
+        reprt_code = reprt_code_map.get(report_type, "11011")
+        # 보고서 제출 시기별 검색 범위
+        if report_type == "사업보고서":
+            next_year = str(int(year) + 1)
+            data = get_disclosures(corp_code=corp_code, bgn_de=f"{next_year}0101",
+                                   end_de=f"{next_year}0731", page_count=100)
+        elif report_type == "1분기보고서":
+            # 1분기보고서: 4~6월 제출
+            data = get_disclosures(corp_code=corp_code, bgn_de=f"{year}0401",
+                                   end_de=f"{year}0630", page_count=100)
+        elif report_type == "반기보고서":
+            # 반기보고서: 7~9월 제출
+            data = get_disclosures(corp_code=corp_code, bgn_de=f"{year}0701",
+                                   end_de=f"{year}0930", page_count=100)
+        elif report_type == "3분기보고서":
+            # 3분기보고서: 10~12월 제출
+            data = get_disclosures(corp_code=corp_code, bgn_de=f"{year}1001",
+                                   end_de=f"{year}1231", page_count=100)
+        else:
+            data = get_disclosures(corp_code=corp_code, bgn_de=f"{year}0101",
+                                   end_de=f"{year}1231", page_count=100)
+        items = data.get("list", [])
+        # 보고서 유형별 키워드 매칭
+        # reprt_code로 필터링: DART API list에 보고서코드 없음 → 제목으로 구분
+        month_kw = {
+            "사업보고서":  ["사업보고서"],
+            "반기보고서":  ["반기보고서"],
+            "1분기보고서": ["분기보고서 (2025.03)", "분기보고서 (2024.03)", "분기보고서 (2023.03)",
+                           "분기보고서 (2022.03)", f"분기보고서 ({year}.03)"],
+            "3분기보고서": ["분기보고서 (2025.09)", "분기보고서 (2024.09)", "분기보고서 (2023.09)",
+                           f"분기보고서 ({year}.09)"],
+        }
+        kws = month_kw.get(report_type, [report_type])
+        candidates = [i for i in items if any(kw in i.get("report_nm", "") for kw in kws)]
+        originals = [c for c in candidates if "정정" not in c.get("report_nm", "")]
+        selected = (originals or candidates)
+        if not selected:
+            return None
+        selected = max(selected, key=lambda x: x.get("rcept_dt", ""))
+        rcept_no = selected["rcept_no"]
+        print(f"    XBRL 다운로드: {corp_name} {selected['report_nm']}")
+        save_path = download_xbrl(rcept_no, corp_name=corp_name,
+                                  reprt_name=report_type, year=year,
+                                  reprt_code=reprt_code)
+        files = glob(os.path.join(save_path, "*.xbrl"))
+        return files[0] if files else None
+    except Exception as e:
+        print(f"    XBRL 다운로드 실패 ({corp_name}): {e}")
+        return None
 
 
-def parse_simple_contexts(xbrl_path, target_year="2025"):
+def parse_simple_contexts(xbrl_path, target_year="2025", ref_date=None, month="12"):
     """
-    사업보고서 XBRL 파싱:
-    - BS: 별도 당기말 (instant {year}-12-31, ConsolidatedAndSeparate 축만)
-    - PL: 별도 당기 (duration {year}-01-01~{year}-12-31, ConsolidatedAndSeparate 축만)
-    - prior_bs: 별도 전기말 (instant {prev_year}-12-31)
+    보고서 XBRL 파싱.
+    ref_date: BS 기준일 (기본 {year}-{month}-말일)
+    month: 결산월 ("03","06","09","12")
 
     반환: {"bs": {account_id: value_won}, "pl": {account_id: value_won}, "prior_bs": {...}}
     """
+    import calendar as _cal
+    if ref_date is None:
+        last_day = _cal.monthrange(int(target_year), int(month))[1]
+        ref_date = f"{target_year}-{month}-{last_day:02d}"
+
+    # PL 기간: 1분기=1~3월, 반기=1~6월, 3분기=1~9월, 연간=1~12월
+    pl_start = f"{target_year}-01-01"
+    pl_end = ref_date
+
+    # 전기말: 직전 연도 12-31 (또는 동일연도 직전 분기말)
+    prev_year = str(int(target_year) - 1)
+    prior_date = f"{prev_year}-12-31"
+
     tree = ET.parse(xbrl_path)
     root = tree.getroot()
 
-    prev_year = str(int(target_year) - 1)
-
     # 단순 context (ConsolidatedAndSeparate 축 1개만) 찾기
     bs_ctx_id = None  # instant 당기말
-    pl_ctx_id = None  # duration
+    pl_ctx_id = None  # duration 누적
     prior_bs_ctx_id = None  # instant 전기말
 
     for ctx in root.findall(f"{{{NS_XBRLI}}}context"):
@@ -876,7 +963,6 @@ def parse_simple_contexts(xbrl_path, target_year="2025"):
             continue
         dim = members[0].get("dimension", "")
         val = (members[0].text or "").strip()
-        # 두 가지 Separate 축 지원: ifrs-full_ConsolidatedAndSeparate... 또는 dart-gcd_StatementInformationAxis
         is_separate_axis = (
             ("ConsolidatedAndSeparateFinancialStatements" in dim and "Separate" in val)
             or ("StatementInformationAxis" in dim and "SeparateMember" in val)
@@ -890,14 +976,14 @@ def parse_simple_contexts(xbrl_path, target_year="2025"):
         end = period.find(f"{{{NS_XBRLI}}}endDate")
 
         if instant is not None:
-            if instant.text == f"{target_year}-12-31":
+            if instant.text == ref_date:
                 if bs_ctx_id is None or "ConsolidatedAndSeparate" in ctx_id:
                     bs_ctx_id = ctx_id
-            elif instant.text == f"{prev_year}-12-31":
+            elif instant.text == prior_date:
                 if prior_bs_ctx_id is None or "ConsolidatedAndSeparate" in ctx_id:
                     prior_bs_ctx_id = ctx_id
         elif start is not None and end is not None:
-            if start.text == f"{target_year}-01-01" and end.text == f"{target_year}-12-31":
+            if start.text == pl_start and end.text == pl_end:
                 if pl_ctx_id is None or "ConsolidatedAndSeparate" in ctx_id:
                     pl_ctx_id = ctx_id
 
@@ -947,7 +1033,7 @@ def parse_simple_contexts(xbrl_path, target_year="2025"):
     return {"bs": bs_data, "pl": pl_data, "prior_bs": prior_bs_data}
 
 
-def parse_insurance_components(xbrl_path, target_year="2025"):
+def parse_insurance_components(xbrl_path, target_year="2025", ref_date=None):
     """
     보험계약부채 구성요소별 잔액 합산 (CSM, BEL, RA).
     여러 XBRL 구조 지원:
@@ -955,6 +1041,8 @@ def parse_insurance_components(xbrl_path, target_year="2025"):
     - 패턴B (삼성생명): 4-dim (Separate+IssuedMember+TypesOfContracts+Component), tag=InsuranceContractsThatAreLiabilities
                        + 2-dim CSM (Separate+IssuedMember), tag=ContractualServiceMargin
     """
+    if ref_date is None:
+        ref_date = f"{target_year}-12-31"
     tree = ET.parse(xbrl_path)
     root = tree.getroot()
 
@@ -991,7 +1079,7 @@ def parse_insurance_components(xbrl_path, target_year="2025"):
         ctx_id = ctx.get("id", "")
         period = ctx.find(f"{{{NS_XBRLI}}}period")
         instant = period.find(f"{{{NS_XBRLI}}}instant")
-        if instant is None or instant.text != f"{target_year}-12-31":
+        if instant is None or instant.text != ref_date:
             continue
 
         members = ctx.findall(f".//{{{NS_XBRLDI}}}explicitMember")
@@ -1106,7 +1194,7 @@ def parse_insurance_components(xbrl_path, target_year="2025"):
             ctx_id = ctx.get("id", "")
             period = ctx.find(f"{{{NS_XBRLI}}}period")
             instant = period.find(f"{{{NS_XBRLI}}}instant")
-            if instant is None or instant.text != f"{target_year}-12-31":
+            if instant is None or instant.text != ref_date:
                 continue
             members = ctx.findall(f".//{{{NS_XBRLDI}}}explicitMember")
             dims = {}
@@ -1180,7 +1268,8 @@ def parse_insurance_components_from_doc(corp_name, target_sum, year="2025"):
 
     # 1Q report year = target_year + 1
     q1_year = str(int(year) + 1)
-    cache_path = os.path.join("data", f"doc_1q_{corp_name}_{q1_year}.xml")
+    cache_path = os.path.join("data", corp_name, f"doc_1q_{q1_year}.xml")
+    os.makedirs(os.path.dirname(cache_path), exist_ok=True)
 
     if not os.path.exists(cache_path):
         try:
@@ -1368,7 +1457,8 @@ def parse_csm_movement_from_doc(corp_name, csm_end_target, year="2025"):
     if not corp_code:
         return {}
 
-    cache_path = os.path.join("data", f"doc_annual_{corp_name}_{year}.xml")
+    cache_path = os.path.join("data", corp_name, f"doc_annual_{year}.xml")
+    os.makedirs(os.path.dirname(cache_path), exist_ok=True)
 
     if not os.path.exists(cache_path):
         try:
@@ -1605,7 +1695,8 @@ def _extract_csm_movement(filepath, csm_end_target):
 
 def _get_annual_doc(corp_name, year="2025"):
     """사업보고서 document.xml 경로 반환 (없으면 다운로드)."""
-    cache_path = os.path.join("data", f"doc_annual_{corp_name}_{year}.xml")
+    cache_path = os.path.join("data", corp_name, f"doc_annual_{year}.xml")
+    os.makedirs(os.path.dirname(cache_path), exist_ok=True)
     if os.path.exists(cache_path):
         return cache_path
     corp_code = ALL_CORP_CODES.get(corp_name)
@@ -1664,46 +1755,63 @@ def _extract_kics(filepath):
             continue
 
         cells = text.split('|')
-        ratio, avail, req = None, None, None
+        ratios, avails, reqs = [], [], []
+
+        def _parse_float(s):
+            try:
+                return float(s.replace(',', '').replace('(', '-').replace(')', '').strip())
+            except (ValueError, AttributeError):
+                return 0.0
+
         for i, cell in enumerate(cells):
             cs = cell.strip()
-            def _parse_float(s):
-                try:
-                    return float(s.replace(',', '').replace('(', '-').replace(')', '').strip())
-                except (ValueError, AttributeError):
-                    return 0.0
-
-            # 첫 번째 숫자 컬럼이 당기
-            if ('지급여력비율' in cs or 'A/B' in cs) and ratio is None:
+            if '지급여력비율' in cs or 'A/B' in cs:
                 row = [c.strip() for c in cells[i+1:i+10]]
+                # 첫 셀이 '-'(산출중)이면 당기 미확정 → 이 테이블 건너뜀
+                if row and row[0] in ('-', '산출중', '미정'):
+                    break
                 for v in row:
                     n = _parse_float(v)
-                    if 50 < n < 1000:   # 50~1000% 범위의 비율값
-                        ratio = n / 100  # % → 소수
-                        break
-            elif ('지급여력금액' in cs or '지급여력(A)' in cs or '가용자본' in cs) and avail is None:
-                row = [c.strip() for c in cells[i+1:i+6]]
-                for v in row:
-                    n = _parse_num(v)
-                    if n > 1000:  # 백만원 단위, 최소 1억
-                        avail = n
-                        break
-            elif ('지급여력기준' in cs or '지급여력기준금액' in cs or '요구자본' in cs) and req is None:
-                row = [c.strip() for c in cells[i+1:i+6]]
+                    if 50 < n < 1000:
+                        ratios.append(n / 100)
+            elif '지급여력금액' in cs or '지급여력(A)' in cs or ('가용자본' in cs and '요구' not in cs):
+                row = [c.strip() for c in cells[i+1:i+8]]
                 for v in row:
                     n = _parse_num(v)
                     if n > 1000:
-                        req = n
-                        break
+                        avails.append(n)
+            elif '지급여력기준' in cs or '지급여력기준금액' in cs or '요구자본' in cs:
+                row = [c.strip() for c in cells[i+1:i+8]]
+                for v in row:
+                    n = _parse_num(v)
+                    if n > 1000:
+                        reqs.append(n)
 
-        # 단위가 억원인 경우 보정 (가용자본 < 100,000 백만원이면 억원 단위로 판단)
-        if avail and req:
-            if avail < 100000:  # 억원 단위 (1,000억 이하 = 10조 미만)
-                avail *= 100
-                req *= 100
+        if not ratios or not avails or not reqs:
+            continue
 
-        if ratio and avail and req:
-            return {92: ratio, 93: avail, 94: req}
+        # 억원 단위 보정
+        def _fix_unit(lst):
+            return [v * 100 if v < 100000 else v for v in lst]
+        avails = _fix_unit(avails)
+        reqs = _fix_unit(reqs)
+
+        result = {}
+        # 사업보고서 당기(첫 번째 유효값) = 최종치 Col95-97
+        # 잠정치(Col92-94)는 1분기보고서 발표 시점에 공시되는 별도 값으로
+        # 사업보고서 테이블에서는 구분이 어려우므로 동일값 사용
+        if ratios:
+            result[95] = ratios[0]
+            result[92] = ratios[0]
+        if avails:
+            result[96] = avails[0]
+            result[93] = avails[0]
+        if reqs:
+            result[97] = reqs[0]
+            result[94] = reqs[0]
+
+        if result:
+            return result
 
     return {}
 
@@ -2330,11 +2438,15 @@ def parse_annual_doc_data(corp_name, csm_total=None, oci_total=None, year="2025"
     return result
 
 
-def parse_new_csm(xbrl_path, target_year="2025"):
+def parse_new_csm(xbrl_path, target_year="2025", ref_date=None, start_date=None):
     """
     신계약 CSM 추출: 별도 + duration + InsuranceContractsIssuedMember + ContractualServiceMarginMember
     ChangesInFutureServicesDueToNewContracts... 태그
     """
+    if ref_date is None:
+        ref_date = f"{target_year}-12-31"
+    if start_date is None:
+        start_date = f"{target_year}-01-01"
     tree = ET.parse(xbrl_path)
     root = tree.getroot()
 
@@ -2345,7 +2457,7 @@ def parse_new_csm(xbrl_path, target_year="2025"):
         end = period.find(f"{{{NS_XBRLI}}}endDate")
         if start is None or end is None:
             continue
-        if start.text != f"{target_year}-01-01" or end.text != f"{target_year}-12-31":
+        if start.text != start_date or end.text != ref_date:
             continue
 
         members = ctx.findall(f".//{{{NS_XBRLDI}}}explicitMember")
@@ -2377,11 +2489,15 @@ def parse_new_csm(xbrl_path, target_year="2025"):
     return None
 
 
-def parse_equity_changes(xbrl_path, target_year="2025"):
+def parse_equity_changes(xbrl_path, target_year="2025", ref_date=None, start_date=None):
     """자기주식 소각(Col67), 기타자본변동(Col69) 추출.
     RetainedEarnings component context (2-dim: Separate + RetainedEarnings)에서 추출.
     반환: {67: treasury_cancellation, 69: other_equity_change}
     """
+    if ref_date is None:
+        ref_date = f"{target_year}-12-31"
+    if start_date is None:
+        start_date = f"{target_year}-01-01"
     tree = ET.parse(xbrl_path)
     root = tree.getroot()
 
@@ -2399,9 +2515,9 @@ def parse_equity_changes(xbrl_path, target_year="2025"):
         period = ctx.find(f"{{{NS_XBRLI}}}period")
         start = period.find(f"{{{NS_XBRLI}}}startDate") if period is not None else None
         end = period.find(f"{{{NS_XBRLI}}}endDate") if period is not None else None
-        if start is None or start.text != f"{target_year}-01-01":
+        if start is None or start.text != start_date:
             continue
-        if end is None or end.text != f"{target_year}-12-31":
+        if end is None or end.text != ref_date:
             continue
         members = ctx.findall(f".//{{{NS_XBRLDI}}}explicitMember")
         dims = {m.get("dimension", "").split(":")[-1]: (m.text or "").split(":")[-1] for m in members}
@@ -2431,11 +2547,15 @@ def parse_equity_changes(xbrl_path, target_year="2025"):
     return result
 
 
-def parse_surrender_reserve(xbrl_path, target_year="2025"):
+def parse_surrender_reserve(xbrl_path, target_year="2025", ref_date=None, start_date=None):
     """해약환급금준비금 추출.
     패턴A(생보): 2-dim (Separate + SurrenderValueReserveMember), tag=LoanLossReserveBalance 등
     패턴B(손보/삼성생명): 1-dim (Separate), tag=SurrenderValueReserve, instant 당기말
     """
+    if ref_date is None:
+        ref_date = f"{target_year}-12-31"
+    if start_date is None:
+        start_date = f"{target_year}-01-01"
     tree = ET.parse(xbrl_path)
     root = tree.getroot()
 
@@ -2460,9 +2580,9 @@ def parse_surrender_reserve(xbrl_path, target_year="2025"):
         start = period.find(f"{{{NS_XBRLI}}}startDate")
         end = period.find(f"{{{NS_XBRLI}}}endDate")
         is_cur = (
-            (instant is not None and instant.text == f"{target_year}-12-31") or
-            (start is not None and start.text == f"{target_year}-01-01" and
-             end is not None and end.text == f"{target_year}-12-31")
+            (instant is not None and instant.text == ref_date) or
+            (start is not None and start.text == start_date and
+             end is not None and end.text == ref_date)
         )
         if not is_cur:
             continue
@@ -2503,20 +2623,31 @@ def parse_surrender_reserve(xbrl_path, target_year="2025"):
     return best_b or best_b_added
 
 
-def extract_company_data(corp_name, year="2025"):
-    """한 회사의 사업보고서에서 DATA 시트에 필요한 모든 값 추출"""
-    xbrl_path = find_xbrl_file(corp_name, "사업보고서", year)
+def extract_company_data(corp_name, year="2025", report_type="사업보고서", month="12"):
+    """한 회사의 보고서에서 DATA 시트에 필요한 모든 값 추출.
+    month: 보고서 결산월 ("03"=1분기, "06"=반기, "09"=3분기, "12"=사업보고서)
+    """
+    xbrl_path = find_xbrl_file(corp_name, report_type, year)
     if not xbrl_path:
-        print(f"  ERROR: XBRL not found for {corp_name}")
+        print(f"  ERROR: XBRL not found for {corp_name} ({report_type} {year})")
         return None
 
     print(f"  파싱: {xbrl_path}")
     result = {}
 
-    # 단순 context (BS/PL)
-    simple = parse_simple_contexts(xbrl_path, year)
+    # 분기 보고서는 결산일이 다름 (3, 6, 9월말)
+    ref_date = f"{year}-{month}-{'31' if month == '12' else '30' if month in ('06','09') else '31'}"
+    # 실제 월말일 정확히
+    import calendar
+    last_day = calendar.monthrange(int(year), int(month))[1]
+    ref_date = f"{year}-{month}-{last_day:02d}"
+    start_date = f"{year}-01-01"  # PL 시작일 (항상 연초)
+
+    # 단순 context (BS/PL) — 분기는 해당 분기말/분기 기간 기준
+    simple = parse_simple_contexts(xbrl_path, year, ref_date=ref_date, month=month)
     bs = simple["bs"]
     pl = simple["pl"]
+    is_annual = (month == "12")  # 사업보고서 여부
 
     def _get_bs(account_id):
         v = bs.get(account_id)
@@ -2583,7 +2714,7 @@ def extract_company_data(corp_name, year="2025"):
                 result[col] = (v1 - v2) / 1e6
 
     # Col56: 2-dim (Separate + ReportedAmountMember) context 우선
-    fvoci_v = parse_fvoci_oci(xbrl_path, year)
+    fvoci_v = parse_fvoci_oci(xbrl_path, year, ref_date=ref_date, start_date=start_date)
     if fvoci_v:
         result[56] = fvoci_v / 1e6
 
@@ -2676,13 +2807,13 @@ def extract_company_data(corp_name, year="2025"):
             result[11] = result[7] / denom  # AC 비율
 
     # 보험계약부채 구성요소 (CSM/BEL/RA)
-    components = parse_insurance_components(xbrl_path, year)
+    components = parse_insurance_components(xbrl_path, year, ref_date=ref_date)
     if components["CSM"] == 0 and components["BEL"] == 0 and corp_name in DOC_FALLBACK_CORP_CODES:
-        # XBRL에 component axis 없는 회사: 1Q document.xml fallback
-        col13_val = result.get(13, 0)
-        if col13_val > 0:
-            target = col13_val
-            components = parse_insurance_components_from_doc(corp_name, target, year)
+        # XBRL에 component axis 없는 회사: 1Q document.xml fallback (사업보고서만)
+        if is_annual:
+            col13_val = result.get(13, 0)
+            if col13_val > 0:
+                components = parse_insurance_components_from_doc(corp_name, col13_val, year)
     if components["CSM"] > 0:
         result[75] = components["CSM"] / 1e6
     if components["BEL"] > 0:
@@ -2691,12 +2822,12 @@ def extract_company_data(corp_name, year="2025"):
         result[74] = components["RA"] / 1e6
 
     # 신계약 CSM
-    new_csm = parse_new_csm(xbrl_path, year)
+    new_csm = parse_new_csm(xbrl_path, year, ref_date=ref_date, start_date=start_date)
     if new_csm is not None:
         result[76] = new_csm / 1e6
 
     # 해약환급금준비금
-    surr = parse_surrender_reserve(xbrl_path, year)
+    surr = parse_surrender_reserve(xbrl_path, year, ref_date=ref_date, start_date=start_date)
     if surr is not None:
         result[99] = surr / 1e6
 
@@ -2758,7 +2889,7 @@ def extract_company_data(corp_name, year="2025"):
             break
 
     # Col67/69: 자기주식 소각, 기타자본변동 (RetainedEarnings component 2-dim context)
-    eq_changes = parse_equity_changes(xbrl_path, year)
+    eq_changes = parse_equity_changes(xbrl_path, year, ref_date=ref_date, start_date=start_date)
     if 67 not in result and eq_changes.get(67):
         result[67] = eq_changes[67] / 1e6
     if 69 not in result and eq_changes.get(69):
@@ -2773,12 +2904,12 @@ def extract_company_data(corp_name, year="2025"):
         result[42] = result[43] - result[41]
         result[50] = result[42]
 
-    # Col51: 세전이익 합계 (Col43과 같음)
-    if 43 in result:
-        result[51] = result[43]
+    # Col51: 영업손익 합계 = Col48 + Col49 + Col50
+    if any(c in result for c in [48, 49, 50]):
+        result[51] = result.get(48, 0) + result.get(49, 0) + result.get(50, 0)
 
     # OCI 누계 항목 (당기말/전기말 BS 3-dim context)
-    oci_accum = parse_oci_accumulated(xbrl_path, year)
+    oci_accum = parse_oci_accumulated(xbrl_path, year, ref_date=ref_date)
     oci_cur = oci_accum["cur"]
     oci_prior = oci_accum["prior"]
     for col, keywords in OCI_ACCUM_MAPPING.items():
@@ -2804,49 +2935,47 @@ def extract_company_data(corp_name, year="2025"):
         result[71] = result[18]
 
     # CSM 변동 항목
-    csm_mov = parse_csm_movement(xbrl_path, year)
-    if csm_mov["csm_amortization"]:
-        result[77] = abs(csm_mov["csm_amortization"]) / 1e6  # 항상 양수로
-    if csm_mov["csm_adjustment"]:
-        result[78] = csm_mov["csm_adjustment"] / 1e6
-    if csm_mov["csm_finance"]:
-        result[79] = csm_mov["csm_finance"] / 1e6
+    if is_annual:
+        csm_mov = parse_csm_movement(xbrl_path, year, ref_date=ref_date, start_date=start_date)
+        if csm_mov["csm_amortization"]:
+            result[77] = abs(csm_mov["csm_amortization"]) / 1e6
+        if csm_mov["csm_adjustment"]:
+            result[78] = csm_mov["csm_adjustment"] / 1e6
+        if csm_mov["csm_finance"]:
+            result[79] = csm_mov["csm_finance"] / 1e6
+        if 76 not in result and csm_mov.get("new_csm"):
+            result[76] = abs(csm_mov["new_csm"]) / 1e6
 
-    # Col76 fallback: parse_new_csm이 못 찾으면 csm_movement의 new_csm 사용
-    if 76 not in result and csm_mov.get("new_csm"):
-        result[76] = abs(csm_mov["new_csm"]) / 1e6
+        prior_csm = parse_prior_csm(xbrl_path, year)
+        if prior_csm:
+            result[80] = prior_csm / 1e6
 
-    # Col80: 전기말 CSM
-    prior_csm = parse_prior_csm(xbrl_path, year)
-    if prior_csm:
-        result[80] = prior_csm / 1e6
-
-    # CSM 변동 document.xml fallback (XBRL에 없는 회사)
-    if 77 not in result and 75 in result and corp_name in DOC_CSM_MOVEMENT_COMPANIES:
-        doc_csm = parse_csm_movement_from_doc(corp_name, result[75], year)
-        for col, val in doc_csm.items():
-            if col not in result and val != 0:
-                result[col] = val
+        if 77 not in result and 75 in result and corp_name in DOC_CSM_MOVEMENT_COMPANIES:
+            doc_csm = parse_csm_movement_from_doc(corp_name, result[75], year)
+            for col, val in doc_csm.items():
+                if col not in result and val != 0:
+                    result[col] = val
 
     # Col88: CSM 합계 (= Col75)
     if 75 in result:
         result[88] = result[75]
 
-    # 사업보고서 doc.xml: K-ICS(Col92-94), CSM기간별(Col83-87), 감응도(Col146-158), OCI(Col25-30)
-    csm_total_for_doc = result.get(88, result.get(75, 0))
-    oci_total_for_doc = result.get(17, result.get(24, None))  # Col17(기타포괄손익누계액 기말잔액) 우선
-    total_assets_for_doc = result.get(4, 0)
-    doc_data = parse_annual_doc_data(corp_name, csm_total=csm_total_for_doc,
-                                     oci_total=oci_total_for_doc, year=year,
-                                     total_assets=total_assets_for_doc)
-    for col, val in doc_data.items():
-        if col not in result or result[col] == 0:
-            result[col] = val
-        elif col in (25, 26, 27, 28, 29, 30) and result[col] != 0:
-            pass  # OCI 세부항목은 XBRL에서 이미 있으면 덮어쓰지 않음
+    if is_annual:
+        # 사업보고서 doc.xml: K-ICS, CSM기간별, 감응도, OCI 세부
+        csm_total_for_doc = result.get(88, result.get(75, 0))
+        oci_total_for_doc = result.get(17, result.get(24, None))
+        total_assets_for_doc = result.get(4, 0)
+        doc_data = parse_annual_doc_data(corp_name, csm_total=csm_total_for_doc,
+                                         oci_total=oci_total_for_doc, year=year,
+                                         total_assets=total_assets_for_doc)
+        for col, val in doc_data.items():
+            if col not in result or result[col] == 0:
+                result[col] = val
+            elif col in (25, 26, 27, 28, 29, 30) and result[col] != 0:
+                pass
 
-    # 계리적 가정 변경 민감도 분석 (Col146~158)
-    actuarial = parse_actuarial_sensitivity(xbrl_path, year)
+    # 계리적 가정 변경 민감도 분석 (Col146~158) — 사업보고서만
+    actuarial = parse_actuarial_sensitivity(xbrl_path, year, ref_date=ref_date, start_date=start_date) if is_annual else {}
     for (col, comp), v in actuarial.items():
         result[col] = v / 1e6
 
@@ -2868,9 +2997,9 @@ def extract_company_data(corp_name, year="2025"):
             period = ctx.find(f"{{{NS_XBRLI}}}period")
             start = period.find(f"{{{NS_XBRLI}}}startDate")
             end = period.find(f"{{{NS_XBRLI}}}endDate")
-            if start is None or start.text != f"{year}-01-01":
+            if start is None or start.text != start_date:
                 continue
-            if end is None or end.text != f"{year}-12-31":
+            if end is None or end.text != ref_date:
                 continue
             members = ctx.findall(f".//{{{NS_XBRLDI}}}explicitMember")
             dims = {}
@@ -2952,9 +3081,9 @@ def extract_company_data(corp_name, year="2025"):
         result[47] = result[32] + result[35] - result[41]
 
     # Col64: OCI 체크 = Col63 - Col55 - SUM(Col56~62)
-    # 구성항목 전체 있어야 계산 가능
-    if 63 in result and 55 in result and all(c in result for c in range(56, 63)):
-        oci_detail = [result[c] for c in range(56, 63)]
+    # Col57(대손충당금)은 없으면 0으로 처리, 나머지 주요항목은 있어야 계산
+    if 63 in result and 55 in result and all(c in result for c in [56, 58, 59, 60, 61]):
+        oci_detail = [result.get(c, 0) for c in range(56, 63)]
         result[64] = result[63] - result[55] - sum(oci_detail)
 
     # Col89: CSM 합계 체크 = Col88-SUM(Col83~87), 반올림 오차 보정
@@ -2982,54 +3111,74 @@ def extract_company_data(corp_name, year="2025"):
     return result
 
 
-def load_kics_data(csv_path="data/kics_2512.csv"):
-    """K-ICS CSV 로드: {company_short: {col: value}}
-    Col92~94: 당기(2026.03 기준), Col95~97: 전기(2025.12 기준)
+def _period_to_report(period_code):
+    """기간코드(예: 2512) → (year, month, report_type) 반환"""
+    pc = str(period_code)
+    yy = pc[:2]
+    mm = pc[2:]
+    year = f"20{yy}"
+    month = mm
+    reprt_map = {
+        "03": "1분기보고서",
+        "06": "반기보고서",
+        "09": "3분기보고서",
+        "12": "사업보고서",
+    }
+    report_type = reprt_map.get(mm, "사업보고서")
+    return year, month, report_type
+
+
+def main(year=None, period_code=None):
     """
-    kics = {}
-    if not os.path.exists(csv_path):
-        return kics
-    with open(csv_path, encoding="utf-8-sig") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            short = row.get("회사", "")
-            try:
-                d = {}
-                # 전기 K-ICS (Col95~97) - 2512말 기준
-                if row.get("킥스비율"): d[95] = float(row["킥스비율"]) / 100
-                if row.get("가용자본"): d[96] = float(row["가용자본"])
-                if row.get("요구자본"): d[97] = float(row["요구자본"])
-                if d:
-                    kics[short] = d
-            except (ValueError, TypeError):
-                pass
-    return kics
+    year: 사업연도 (예: "2025"). 미지정 시 직전 연도 자동 사용.
+    period_code: Excel Col2 기간코드 (예: 2512). 미지정 시 year에서 자동 계산 (YY12).
+                 'all'을 지정하면 Excel 빈칸 파일의 모든 기간 처리.
+    """
+    import datetime
+    excel_blank = "DATA_작업_빈칸.xlsx"
 
+    # period_code='all'이면 Excel에서 기간 목록 읽어서 전체 처리
+    if str(period_code).lower() == "all" if period_code else False:
+        try:
+            import openpyxl as _xl
+            wb = _xl.load_workbook(excel_blank, data_only=True)
+            ws = wb["DATA"]
+            periods = sorted(set(
+                str(ws.cell(row=r, column=2).value)
+                for r in range(6, ws.max_row + 1)
+                if ws.cell(row=r, column=2).value is not None
+            ))
+        except Exception:
+            periods = []
+        for p in periods:
+            print(f"\n{'='*60}")
+            print(f"기간코드 {p} 처리 중...")
+            main(period_code=int(p))
+        return
 
-def main():
+    if year is None and period_code is None:
+        year = str(datetime.date.today().year - 1)
+        period_code = int(year[2:] + "12")
+    elif period_code is not None and year is None:
+        year, month, _ = _period_to_report(period_code)
+    elif year is not None and period_code is None:
+        period_code = int(year[2:] + "12")
+
+    year, month, report_type = _period_to_report(period_code)
+
     print("=" * 60)
-    print("사업보고서 XBRL → DATA 시트 매핑 추출")
+    print(f"{report_type} XBRL → DATA 시트 매핑 ({year}년 {month}월, 기간코드 {period_code})")
     print("=" * 60)
-
-    kics_data = load_kics_data()
 
     all_results = {}
     for comp in COMPANIES:
         name = comp["name"]
         short = comp["short"]
         print(f"\n[{name}] ({short})")
-        data = extract_company_data(name, "2025")
+        data = extract_company_data(name, year, report_type=report_type, month=month)
         if data:
-            key = f"2512{short}"
-            # Col2: 기간코드
-            data[2] = 2512
-            # K-ICS 데이터 추가 (Col95-97 최종치만 CSV에서; Col92-94는 doc.xml 우선)
-            if short in kics_data:
-                for col, val in kics_data[short].items():
-                    if val and col in (95, 96, 97):  # 최종치만 덮어씀
-                        data[col] = val
-                    elif val and col not in (92, 93, 94):  # 잠정치는 doc.xml 우선
-                        data[col] = val
+            key = f"{period_code}{short}"
+            data[2] = period_code
             all_results[key] = data
             print(f"  추출 항목: {len(data)}개")
             if 4 in data:
@@ -3040,7 +3189,7 @@ def main():
                 print(f"  당기순이익: {data[44]:,.2f}M")
 
     # CSV 출력
-    output_path = "data/data_sheet_2512.csv"
+    output_path = f"data/data_sheet_{period_code}.csv"
     os.makedirs("data", exist_ok=True)
 
     all_cols = sorted(set(col for data in all_results.values() for col in data.keys()))
@@ -3054,6 +3203,62 @@ def main():
     print(f"\n저장: {output_path}")
     print(f"회사 수: {len(all_results)}, 열 수: {len(all_cols)}")
 
+    # Excel 빈칸 파일에 결과 채우기
+    excel_blank = "DATA_작업_빈칸.xlsx"
+    if os.path.exists(excel_blank):
+        try:
+            import openpyxl as _xl
+            wb = _xl.load_workbook(excel_blank, data_only=True, keep_vba=False)
+            ws = wb["DATA"]
+
+            # row1: 컬럼번호 → Excel열 역매핑
+            col_to_excel = {}
+            for ec in range(1, ws.max_column + 1):
+                v = ws.cell(row=1, column=ec).value
+                if v is not None:
+                    try:
+                        col_to_excel[int(v)] = ec
+                    except (ValueError, TypeError):
+                        pass
+
+            # 기간코드(col2) + 회사명(col3) → 데이터행 매핑
+            short_to_row = {}
+            for r in range(6, ws.max_row + 1):
+                v2 = ws.cell(row=r, column=2).value
+                v3 = ws.cell(row=r, column=3).value
+                if str(v2) == str(period_code) and v3:
+                    short_to_row[str(v3)] = r
+
+            filled = 0
+            for key, data in all_results.items():
+                short = key[len(str(period_code)):]  # "2512미래" -> "미래"
+                row_idx = short_to_row.get(short)
+                if row_idx is None:
+                    continue
+                for col_num, val in data.items():
+                    if col_num == 2:
+                        continue
+                    ec = col_to_excel.get(col_num)
+                    if ec is None:
+                        continue
+                    cell = ws.cell(row=row_idx, column=ec)
+                    if cell.data_type != "f":
+                        cell.value = val
+                        filled += 1
+
+            wb.save(excel_blank)
+            print(f"Excel 채우기 완료: {excel_blank} ({filled}셀)")
+        except Exception as e:
+            print(f"Excel 쓰기 실패: {e}")
+
 
 if __name__ == "__main__":
-    main()
+    import argparse
+    parser = argparse.ArgumentParser(description="동업사 공시비교 DATA 시트 자동 추출")
+    parser.add_argument("--year", default=None,
+                        help="사업연도 (예: 2025). 미지정 시 직전 연도 자동 사용.")
+    parser.add_argument("--period", default=None,
+                        help="기간코드 (예: 2512) 또는 'all'(Excel 내 전체 기간). 미지정 시 year에서 자동 계산.")
+    args = parser.parse_args()
+    period = args.period if args.period == "all" else (int(args.period) if args.period else None)
+    main(year=args.year, period_code=period)

@@ -1,355 +1,257 @@
-# 동업사 공시비교 자동 추출 (parse_annual.py)
+# 동업사 공시비교 DATA 시트 자동화
 
-12개 보험사의 DART 공시(XBRL + document.xml)에서 DATA 시트 컬럼을 자동 추출합니다.
+DART 전자공시시스템에서 12개 보험사의 XBRL 파일과 원문 XML(document.xml)을 받아  
+`DATA_작업_빈칸.xlsx`의 DATA 시트를 자동으로 채웁니다.
 
-**현재 성능 (2512 기준):** OK=989, FAIL=48, MISS=218 / 전체 1,255건
-
-## 실행
+## 실행 방법
 
 ```bash
-python parse_annual.py        # 추출 → data/data_sheet_2512.csv
-python verify_2512.py         # Excel 정답과 비교 검증
+# 전체 기간 일괄 처리 (Excel에 있는 모든 기간코드)
+python parse_annual.py --period all
+
+# 특정 기간만
+python parse_annual.py --period 2512    # 2025년 12월 사업보고서
+python parse_annual.py --period 2506    # 2025년 6월 반기보고서
+python parse_annual.py --period 2412    # 2024년 12월 사업보고서
 ```
 
----
-
-## 컬럼별 추출 방법
-
-### Col4 총자산
-XBRL 별도 당기말 `ifrs-full_Assets`
-
-### Col5 FVPL
-XBRL 별도 당기말 `ifrs-full_FinancialAssetsAtFairValueThroughProfitOrLoss`
-
-### Col6 FVOCI
-XBRL 별도 당기말 `ifrs-full_FinancialAssetsAtFairValueThroughOtherComprehensiveIncome`  
-→ fallback: `dart_SecuritiesAtFairValueThroughOtherComprehensiveIncome`
-
-### Col7 AC
-XBRL 별도 당기말 `ifrs-full_FinancialAssetsAtAmortisedCost`
-
-### Col8 종속·관계기업
-XBRL 별도 당기말 `ifrs-full_InvestmentsInSubsidiariesJointVenturesAndAssociates`  
-→ fallback: `ifrs-full_InvestmentAccountedForUsingEquityMethod`
-
-### Col9~11 총자산대비비중(FVPL/FVOCI/AC)
-계산: Col5/Col4, Col6/Col4, Col7/Col4
-
-### Col12 부채
-XBRL 별도 당기말 `ifrs-full_Liabilities`
-
-### Col13 보험계약부채
-XBRL 별도 당기말 `ifrs-full_InsuranceContractsIssuedThatAreLiabilities`  
-→ fallback: dart_보험계약부채(참여특성有) + dart_보험계약부채(참여특성無) 합산
-
-### Col14 자본(신종자본증권 제외)
-계산: Col15 - Col16
-
-### Col15 자본
-XBRL 별도 당기말 `ifrs-full_Equity`
-
-### Col16 신종자본증권
-XBRL 별도 당기말 `dart_HybridBonds`
-
-### Col17 기타포괄손익누계액
-XBRL 별도 당기말 `ifrs-full_AccumulatedOtherComprehensiveIncome`
-
-### Col18 이익잉여금
-XBRL 별도 당기말 `ifrs-full_RetainedEarnings`
-
-### Col19 기시자본(연결)
-XBRL 전기말 `ifrs-full_Equity` (별도 당기말과 동일 태그, 전기 instant context)
-
-### Col20 기시자본(신종자본증권 제외)
-계산: 전기말 Col15 - 전기말 Col16
-
-### Col21 자산운용률·총자산
-사업보고서 document.xml → 운용자산/자산운용률 테이블에서 총 자 산(A) 항목
-
-### Col22 운용자산
-사업보고서 document.xml → 운용자산(B) 항목  
-단위가 억원이면 ×100 자동 변환 (총자산과 비교해 5% 미만이면 억원 단위로 판단)
-
-### Col23 자산운용률
-사업보고서 document.xml → 자산운용률(B/A) 항목 (% → 소수)
-
-### Col24 기타포괄손익누계액 합계
-= Col17 (동일 값)
-
-### Col25 FVOCI평가손익
-XBRL 별도 당기말 OCI 누계 3-dim context에서 `FinancialAssets` 키워드 멤버 합산  
-→ 없으면 사업보고서 document.xml OCI 세부잔액 테이블
-
-### Col26 보험계약자산(부채)순금융손익
-XBRL 별도 당기말 OCI 누계에서 `InsuranceContract` 키워드 멤버 합산  
-→ 없으면 doc.xml: `보험계약 관련 금융손익` 행
-
-### Col27 재보험계약자산(부채)
-XBRL 별도 당기말 OCI 누계에서 `ReinsuranceFinance` 키워드 멤버  
-→ 없으면 doc.xml: `재보험계약 관련 금융손익` 행
-
-### Col28 현금흐름위험회피
-XBRL 별도 당기말 OCI 누계에서 `CashFlowHedges` 키워드 멤버  
-→ 없으면 doc.xml: `현금흐름위험회피` 행
-
-### Col29 재평가잉여금
-XBRL **전기말** OCI 누계에서 `Revaluation` 키워드 멤버  
-→ 없으면 doc.xml: `재평가잉여금` 행
-
-### Col30 확정급여부채
-XBRL 별도 당기말 OCI 누계에서 `RemeasurementsOfDefinedBenefit` 키워드 멤버  
-→ 없으면 doc.xml: `확정급여채무 재측정요소` 행
-
-### Col31 CHECK(OCI)
-계산: Col24 - (Col25+Col26+Col27+Col28+Col29+Col30)  
-모든 구성항목(Col25~30) 있을 때만 계산
-
-### Col32 보험손익
-XBRL 별도 당기 `ifrs-full_InsuranceServiceResult`
-
-### Col33 보험서비스수익
-XBRL 별도 당기 `dart_OperatingIncomeInsurance`
-
-### Col34 보험서비스비용
-XBRL 별도 당기 `dart_OperatingExpenseInsurance`
-
-### Col35 투자손익
-XBRL 별도 당기 `dart_InvestmentIncomeExpenses`
-
-### Col36 보험금융손익
-계산: `dart_InsuranceFinanceIncome...ProfitOrLoss` - `dart_InsuranceFinanceExpenses...ProfitOrLoss`
-
-### Col37 재보험금융손익
-계산: `dart_FinanceIncomeFromReinsurance...ProfitOrLoss` - `dart_FinanceExpensesFromReinsurance...ProfitOrLoss`
-
-### Col38 금융손익
-계산: Col35 - Col36 - Col37 + Col39 - Col40
-
-### Col39 재산관리비
-XBRL 별도 당기 `ifrs-full_SellingGeneralAndAdministrativeExpense`
-
-### Col40 기타투자손익
-XBRL 별도 당기 수수료수익 + 임대료 + 기타영업수익 - 기타영업비용 (여러 태그 합산)
-
-### Col41 영업이익
-XBRL 별도 당기 `ifrs-full_ProfitLossFromOperatingActivities`
-
-### Col42 영업외손익
-XBRL 별도 당기 `ifrs-full_NonOperatingProfitLoss`  
-→ 없으면 계산: Col43 - Col41
-
-### Col43 세전손익
-XBRL 별도 당기 `ifrs-full_ProfitLossBeforeTax`
-
-### Col44 당기순이익
-XBRL 별도 당기 `ifrs-full_ProfitLoss`
-
-### Col45 CHECK1 (영업손익)
-계산: Col41 + Col42 - Col43
-
-### Col46 CHECK2 (투자손익)
-계산: Col36 + Col37 + Col38 - Col39 + Col40 - Col35  
-Col35/36/38/39/40 모두 있을 때만 계산
-
-### Col47 CHECK3 (보험투자손익)
-계산: Col32 + Col35 - Col41
-
-### Col48 보험손익(별도표)
-= Col32 (동일)
-
-### Col49 투자손익(별도표)
-= Col35 (동일)
-
-### Col50 영업외손익(별도표)
-= Col42 (동일)
-
-### Col51 세전손익 합계
-= Col43 (동일)
-
-### Col55 기타포괄손익누계액 기초
-XBRL 전기말(전기말 instant) `ifrs-full_AccumulatedOtherComprehensiveIncome`
-
-### Col56 FVOCI평가손익 변동
-XBRL 별도 당기 `ifrs-full_OtherComprehensiveIncomeNetOfTaxFinancialAssets...FVOCI...`
-
-### Col57 대손충당금
-XBRL 별도 당기 `ifrs-full_OtherComprehensiveIncomeNetOfTaxCreditLosses...`
-
-### Col58 보험계약금융손익(재보 포함) OCI
-계산: 보험OCI + 재보험OCI  
-= `ifrs-full_OtherComprehensiveIncomeNetOfTaxInsuranceFinanceIncome...` + `...FromReinsurance...`
-
-### Col59 현금흐름위험회피파생상품
-XBRL 별도 당기 `ifrs-full_OtherComprehensiveIncomeNetOfTaxCashFlowHedges`  
-→ fallback: `dart_OtherComprehensiveIncomeNetOfTaxGainsLossesOnHedgingInstrument`와 합산
-
-### Col60 재평가잉여금 변동
-XBRL 별도 당기 `ifrs-full_OtherComprehensiveIncomeNetOfTaxGainsLossesOnRevaluation...`
-
-### Col61 확정급여부채 재측정
-XBRL 별도 당기 `ifrs-full_OtherComprehensiveIncomeNetOfTaxGainsLossesOnRemeasurementsOfDefinedBenefitPlans`
-
-### Col62 해외사업환산손익
-XBRL 별도 당기 `ifrs-full_OtherComprehensiveIncomeNetOfTaxExchangeDifferencesOnTranslation`
-
-### Col63 기타포괄손익누계액 기말
-= Col17 (당기말 = BS 잔액)
-
-### Col64 CHECK(OCI 자본변동)
-계산: Col63 - Col55 - (Col56+57+58+59+60+61+62)  
-Col56~62 전부 있을 때만 계산
-
-### Col65 이익잉여금 기초
-XBRL 전기말 `ifrs-full_RetainedEarnings`
-
-### Col66 결산배당
-XBRL 별도 당기 `dart_DividendsPaidClassifiedAsFinancingActivities` (음수 저장)
-
-### Col67 자기주식 소각/처분
-XBRL 별도 당기 `ifrs-full_CancellationOfTreasuryShares`  
-context: 2-dim (Separate + RetainedEarnings component)
-
-### Col68 순이익
-= Col44
-
-### Col69 기타(가업결합·OCI재분류 등)
-XBRL 별도 당기 `dart_TransferOfAmountRecognisedInOtherComprehensiveIncome...`  
-또는 `ifrs-full_OtherComprehensiveIncomeNetOfTax...FVOCI`  
-context: 2-dim (Separate + RetainedEarnings component)
-
-### Col70 신종자본증권 배당
-XBRL 별도 당기 `dart_DividendToHybridBond` (음수 저장)  
-context: 2-dim (Separate + RetainedEarnings component)
-
-### Col71 이익잉여금 기말
-= Col18 (당기말 BS 잔액)
-
-### Col72 22년말(ifrs4)
-IFRS17 전환 시점 값. 2512 기준 모두 0(수식 결과). XBRL/doc.xml 미포함.
-
-### Col73 BEL (순부채 기준)
-- **XBRL 있는 회사**: 별도 당기말 보험계약부채 현재가치추정치 축 집계
-- **5개사 fallback** (교보/신한라이프/KB생명/메리츠화재/KB손해보험): 1분기보고서 document.xml → 보험계약부채 구성요소 테이블에서 `현재가치 추정치` 컬럼 합산, target=Col13 기준 당기 테이블 선택
-
-### Col74 RA
-- XBRL 또는 1분기 doc.xml 위험조정 컬럼
-
-### Col75 CSM
-- XBRL 또는 1분기 doc.xml 보험계약마진 컬럼
-
-### Col76 신계약CSM
-- XBRL: `dart/ifrs-full_ChangesInFutureServicesDueToNewContracts...ContractualServiceMarginMember` 등
-- 5개사 fallback: 사업보고서 doc.xml CSM 변동표 → `신계약`, `최초 인식` 라벨 행
-
-### Col77 CSM상각
-- XBRL: 서비스이전 보험계약마진 축
-- 5개사 fallback: doc.xml → `보험계약마진 상각`, `서비스 제공`, `당기손익으로 인식한 보험계약마진` 라벨 행 (항상 양수 저장)
-
-### Col78 CSM조정
-- XBRL: 보험계약마진을 조정하는 추정치 변동 축
-- 5개사 fallback: doc.xml → `보험계약마진을 조정` 라벨 행
-
-### Col79 보험금융손익(CSM)
-- XBRL: 보험금융손익 CSM 축
-- 5개사 fallback: doc.xml → `순보험금융손익` 또는 `보험금융손익` 행  
-  ※ 신한라이프: `보험금융손익` 하위에 sub-label(당기손익)이 있어 1열 offset 처리
-
-### Col80 전기CSM
-- XBRL: 전기말 context CSM 값
-- 5개사 fallback: doc.xml CSM 변동표 → `기초 순장부금액`, `기초 보험계약마진` 등 라벨 행
-
-### Col81 보험료배분접근법
-XBRL에서 PAA 관련 잔여보장부채
-
-### Col82 CSM 증감 CHECK
-계산: Col80 + Col76 - Col77 + Col78 + Col79 - Col75
-
-### Col83~87 CSM 기간별 기대수익인식금액
-사업보고서 document.xml → CSM 만기 테이블  
-- target(Col88=Col75)으로 당기 테이블 선택
-- 버킷 구조 자동 판별: 5컬럼(삼성화재), 7컬럼(교보), 9컬럼(DB손보), 10+컬럼(동양), 15+컬럼(한화)
-- 매핑: Col83=1년이하, Col84=1~3년, Col85=3~5년, Col86=5~10년, Col87=10년초과
-- **미추출**: 신한라이프/삼성생명/미래에셋/KB라이프/현대해상/메리츠화재/KB손보 (doc.xml 미포함)
-
-### Col88 CSM 합계
-= Col75
-
-### Col89 CHECK(CSM기간별)
-계산: Col88 - (Col83+84+85+86+87)  
-Col83~87 모두 있을 때만 계산, 반올림 오차 ≤2 이면 0
-
-### Col92~94 K-ICS 잠정치 (비율/가용자본/요구자본)
-사업보고서 document.xml → 지급여력비율 테이블  
-- 비율: `지급여력비율(A/B)` 행 첫 번째 수치 (% → 소수)  
-- 억원 단위 자동 감지: 가용자본 < 100,000 이면 ×100  
-- **미추출**: 삼성생명/삼성화재/현대해상 (doc.xml에 테이블 없음)
-
-### Col95~97 K-ICS 최종치 (비율/가용자본/요구자본)
-`data/kics_2512.csv` 수동 파일 (연도별로 별도 관리 필요)
-
-### Col99 해약환급금준비금
-XBRL 별도 당기말/당기 `dart_SurrenderValueReserve` 또는 관련 잔액 태그
-
-### Col101 예상손해율(A)
-사업보고서 document.xml  
-- Method1: TE ACODE 태그 `ExpectedLossRateOfInsuranceClaim...`, `ExpectedLossRatioOf...`
-- Method2: 테이블 파싱 → `예상손해율` 라벨 다음 수치, 또는 헤더 이후 첫 번째 수치  
-  ※ 신한라이프: `예상손해율(A)|93.12%|...` 라벨 바로 다음 값  
-  ※ 교보/삼성화재: `예상손해율(%)|실제손해율(%)| | |94.5%|96.9%` 헤더 이후 값
-
-### Col102 실제손해율(B)
-doc.xml → Method1/2 동일, `실제손해율` 라벨 다음 수치
-
-### Col103 보험금예실차비율(b-a)
-계산: Col101 - Col102
-
-### Col104 실제/예상보험금 비율
-계산: Col102 / Col101
-
-### Col107 손해율(손보 별도)
-doc.xml 위험보험료 대비 손해율 테이블 (미추출 회사 있음)
-
-### Col108 위험보험료
-doc.xml 테이블 (미추출 회사 있음)
-
-### Col109 사고보험금(간접제외)
-doc.xml 테이블 (미추출 회사 있음)
-
-### Col111 예실차 합계
-doc.xml (미추출 — 보험종류별 다차원 집계 필요)
-
-### Col112 보험금예실차 / Col113 예상보험금 / Col114 실제보험금
-doc.xml (미추출)
-
-### Col115 사업비예실차 / Col116 예상사업비 / Col117 실제사업비
-doc.xml (미추출)
-
-### Col146~150 BEL+RA 기준 가정변경 (해지율/위험률/사업비/기타/물량)
-XBRL 별도 당기 `dart_ChangeIn...Assumption...` BEL component 3-dim context  
-→ 없으면 사업보고서 doc.xml 가정변경효과 테이블 → BEL 컬럼(첫 번째) + RA 컬럼 합산  
-  ※ 교보: 단위 억원(×100), ※ 동양/삼성화재/삼성생명: doc.xml 파싱 미지원(스킵)
-
-### Col153~158 CSM 기준 가정변경 (해지율/위험률/사업비/기타/물량/손실요소)
-XBRL 별도 당기 `dart_ChangeIn...Assumption...` CSM component  
-→ 없으면 doc.xml 가정변경 테이블 → CSM 컬럼(마지막)  
-  Col158(손실요소): XBRL `dart_FluctuationsDueToLossFactors...` 또는 DoNotAdjust/Adjust 패턴
+**XBRL / document.xml이 없으면 DART API에서 자동 다운로드합니다.**  
+결과는 `data/` 폴더에 캐시되어 다음 실행 시 재사용됩니다.
 
 ---
 
-## 핵심 기술 사항
+## 컬럼별 자동화 현황 (2512 기준, 12개사)
 
-### XBRL context 구조
-- **1-dim (Separate만)**: BS/PL 대부분 항목
-- **2-dim (Separate + ComponentsOfEquity)**: 자본변동 항목 (Col66~70) — RetainedEarnings / CapitalAdjustments component
-- **3-dim (Separate + OCI member + entity-specific)**: OCI 누계 잔액 (Col25~30)
-- **Multi-dim (Separate + 보험계약 축 + CSM 축 등)**: BEL/RA/CSM, 감응도
+아래에서 **소스**는 데이터를 어디서 가져오는지를 나타냅니다.
 
-### document.xml 파싱 방법
-HTML 테이블이 XML에 embedded. `<TABLE>` 태그 추출 → 태그 제거 후 `|` 구분 셀 배열로 변환.
+- **XBRL**: `fnlttXbrl.xml` API로 받은 `.xbrl` 파일 (별도 재무제표 기준)
+- **원문XML**: `document.xml` API로 받은 보고서 원문 HTML 테이블 파싱
+- **계산**: 다른 컬럼 값으로부터 파생
 
-**섹션 분리 (연결/별도)**: 파일 내 테이블 위치 gap > 500KB → 별도 섹션 (마지막 섹션)  
-**당기 테이블 선택**: target 값(CSM기말, OCI합계 등)과 가장 가까운 테이블 선택
+---
 
-### 단위 변환
-- XBRL: 원(KRW) → 백만원 (`/ 1e6`)
-- doc.xml: 회사마다 억원 또는 백만원 → 총자산 대비 비율로 자동 감지 후 변환
+### B/S (재무상태표)
+
+| Col | 항목 | 소스 | 태그 / 방법 | 결과 |
+|-----|------|------|-----------|------|
+| 4 | 총자산 | XBRL | `ifrs-full_Assets` | ✅ 12/12 |
+| 5 | FVPL | XBRL | `ifrs-full_FinancialAssetsAtFairValueThroughProfitOrLoss` | ✅ 12/12 |
+| 6 | FVOCI | XBRL | `ifrs-full_FinancialAssetsAtFairValueThroughOtherComprehensiveIncome` | ✅ 12/12 |
+| 7 | AC | XBRL | `ifrs-full_FinancialAssetsAtAmortisedCost` | ✅ 12/12 |
+| 8 | 종속·관계기업 | XBRL | `ifrs-full_InvestmentsInSubsidiariesJointVenturesAndAssociates` | ✅ 11/11 |
+| 9~11 | 총자산대비비중 | 계산 | Col5~7 / Col4 | ⚠️ KB손보 오차 (총자산 기준 차이) |
+| 12 | 부채 | XBRL | `ifrs-full_Liabilities` | ✅ 12/12 |
+| 13 | 보험계약부채 | XBRL | `ifrs-full_InsuranceContractsIssuedThatAreLiabilities` | ✅ 12/12 |
+| 14 | 자본(신종제외) | 계산 | Col15 − Col16 | ✅ 12/12 |
+| 15 | 자본 | XBRL | `ifrs-full_Equity` | ✅ 12/12 |
+| 16 | 신종자본증권 | XBRL | `dart_HybridBonds` | ✅ 5/5 (발행 회사만) |
+| 17 | OCI누계액 | XBRL | `ifrs-full_AccumulatedOtherComprehensiveIncome` | ✅ 12/12 |
+| 18 | 이익잉여금 | XBRL | `ifrs-full_RetainedEarnings` | ✅ 12/12 |
+
+---
+
+### 자산운용
+
+| Col | 항목 | 소스 | 태그 / 방법 | 결과 |
+|-----|------|------|-----------|------|
+| 21 | 자산운용 총자산 | 원문XML | 지급여력 테이블의 `총 자 산(A)` | ⚠️ 삼성 MISS (doc.xml에 없음) |
+| 22 | 운용자산 | 원문XML | 운용자산/자산운용률 테이블 `운용자산(B)` | ⚠️ 삼성·삼성화재·현대해상·KB손보 MISS |
+| 23 | 자산운용률 | 원문XML | 운용자산/자산운용률 테이블 `자산운용률(B/A)` | ⚠️ 동일 4개사 MISS |
+
+> **MISS 이유**: 해당 회사들의 사업보고서 원문 XML에 운용자산 테이블이 포함되지 않음.  
+> → 사업보고서 PDF나 경영공시 별도 확인 필요.
+
+---
+
+### 기타포괄손익누계액 (OCI 잔액)
+
+| Col | 항목 | 소스 | 태그 / 방법 | 결과 |
+|-----|------|------|-----------|------|
+| 24 | OCI 합계 | 계산 | = Col17 | ✅ 12/12 |
+| 25 | FVOCI 평가손익 | XBRL→원문XML | OCI 3-dim context `FinancialAssets` 키워드 멤버 합산 | ⚠️ 신한라이프·KB라이프·DB손보 MISS |
+| 26 | 보험계약 금융손익 | XBRL→원문XML | OCI 3-dim `InsuranceContract` 키워드 멤버 | ⚠️ 5개사 MISS |
+| 27 | 재보험계약 금융손익 | XBRL→원문XML | OCI 3-dim `ReinsuranceFinance` 키워드 멤버 | ⚠️ 8개사 MISS, 교보 오차 |
+| 28 | 현금흐름위험회피 | XBRL→원문XML | OCI 3-dim `CashFlowHedges` 키워드 멤버 | ⚠️ 6개사 MISS |
+| 29 | 재평가잉여금 | XBRL→원문XML | **전기말** OCI `Revaluation` 키워드 멤버 | ⚠️ 3개사 MISS |
+| 30 | 확정급여부채 재측정 | XBRL→원문XML | OCI 3-dim `RemeasurementsOfDefinedBenefit` 키워드 멤버 | ⚠️ 4개사 MISS |
+| 31 | CHECK | 계산 | Col24 − (Col25+…+Col30) | ⚠️ 세부항목 모두 있을 때만 |
+
+> **MISS 이유**: XBRL에서 회사마다 OCI 세부항목의 3-dim context 구조가 달라 일부 회사는 매핑 불가.  
+> → 자본변동표 원문 XML에서 추출 가능하나, 회사별 테이블 구조 다름.
+
+---
+
+### 손익계산서 (P/L)
+
+| Col | 항목 | 소스 | 태그 / 방법 | 결과 |
+|-----|------|------|-----------|------|
+| 32 | 보험손익 | XBRL | `ifrs-full_InsuranceServiceResult` | ✅ 12/12 |
+| 33 | 보험서비스수익 | XBRL | `dart_OperatingIncomeInsurance` | ✅ 12/12 |
+| 34 | 보험서비스비용 | XBRL | `dart_OperatingExpenseInsurance` | ✅ 12/12 |
+| 35 | 투자손익 | XBRL | `dart_InvestmentIncomeExpenses` | ✅ 12/12 |
+| 36 | 보험금융손익 | XBRL | `dart_InsuranceFinanceIncome` − `dart_InsuranceFinanceExpenses` | ✅ 12/12 |
+| 37 | 재보험금융손익 | XBRL | `dart_FinanceIncomeFromReinsurance` − `dart_FinanceExpensesFromReinsurance` | ⚠️ 교보 오차 (income-only 구조) |
+| 38 | 금융손익 | 계산 | Col35 − Col36 − Col37 + Col39 − Col40 | ⚠️ 삼성화재·DB손보 소오차, KB라이프 MISS |
+| 39 | 재산관리비 | XBRL | `ifrs-full_SellingGeneralAndAdministrativeExpense` | ✅ 11/11 |
+| 40 | 기타투자손익 | XBRL | 수수료+임대료+기타수익−기타비용 합산 | ⚠️ 삼성화재·DB손보 소오차 |
+| 41 | 영업이익 | XBRL | `ifrs-full_ProfitLossFromOperatingActivities` | ✅ 12/12 |
+| 42 | 영업외손익 | XBRL | `ifrs-full_NonOperatingProfitLoss` (없으면 Col43−Col41) | ✅ 12/12 |
+| 43 | 세전손익 | XBRL | `ifrs-full_ProfitLossBeforeTax` | ✅ 12/12 |
+| 44 | 당기순이익 | XBRL | `ifrs-full_ProfitLoss` | ✅ 12/12 |
+| 45~47 | CHECK 1~3 | 계산 | 영업/투자/보험+투자 체크 | ✅ 12/12 |
+
+---
+
+### 자본변동표 — OCI 변동분
+
+| Col | 항목 | 소스 | 태그 / 방법 | 결과 |
+|-----|------|------|-----------|------|
+| 55 | OCI 기초잔액 | XBRL | 전기말 `ifrs-full_AccumulatedOtherComprehensiveIncome` | ✅ 12/12 |
+| 56 | FVOCI 평가손익 변동 | XBRL | `OtherComprehensiveIncomeNetOfTax...FVOCI...` | ⚠️ 동양·현대해상 소오차 |
+| 57 | 대손충당금 변동 | XBRL | `OtherComprehensiveIncomeNetOfTaxCreditLosses...` | ❌ 전 회사 미추출 (교보 1개사만 해당, 금액 소액) |
+| 58 | 보험계약금융손익 OCI | XBRL | 보험OCI + 재보험OCI 합산 | ✅ 12/12 |
+| 59 | 현금흐름위험회피 변동 | XBRL | `OtherComprehensiveIncomeNetOfTaxCashFlowHedges` | ⚠️ 교보 소오차 |
+| 60 | 재평가잉여금 변동 | XBRL | `OtherComprehensiveIncomeNetOfTaxGainsLossesOnRevaluation` | ⚠️ 동양·현대해상·DB손보 오차 |
+| 61 | 확정급여부채 재측정 | XBRL | `OtherComprehensiveIncomeNetOfTax...RemeasurementsOfDefinedBenefitPlans` | ✅ 12/12 |
+| 62 | 해외사업환산손익 | XBRL | `OtherComprehensiveIncomeNetOfTaxExchangeDifferencesOnTranslation` | ⚠️ 동양 MISS |
+| 63 | OCI 기말잔액 | 계산 | = Col17 | ✅ 12/12 |
+| 64 | CHECK | 계산 | Col63 − Col55 − (Col56~62) 합산 | ⚠️ Col57 없는 회사는 오차 가능 |
+
+---
+
+### 자본변동표 — 이익잉여금
+
+| Col | 항목 | 소스 | 태그 / 방법 | 결과 |
+|-----|------|------|-----------|------|
+| 65 | 이익잉여금 기초 | XBRL | 전기말 `ifrs-full_RetainedEarnings` | ⚠️ 메리츠화재 소오차 |
+| 66 | 결산배당 | XBRL | `dart_DividendsPaidClassifiedAsFinancingActivities` | ✅ 8/8 (배당 회사만) |
+| 67 | 자기주식 소각/처분 | XBRL | `ifrs-full_CancellationOfTreasuryShares` (RetainedEarnings component) | ✅ 2/2 (해당 회사만) |
+| 68 | 순이익 | 계산 | = Col44 | ✅ 12/12 |
+| 69 | 기타 자본변동 | XBRL | `dart_TransferOfAmountRecognised...` (RetainedEarnings component) | ⚠️ 동양 소오차, KB손보 오류 |
+| 70 | 신종자본증권 배당 | XBRL | `dart_DividendToHybridBond` (RetainedEarnings component) | ⚠️ 메리츠화재 소오차, 현대해상 MISS |
+| 71 | 이익잉여금 기말 | 계산 | = Col18 | ✅ 12/12 |
+
+---
+
+### 보험계약부채 구성요소
+
+| Col | 항목 | 소스 | 태그 / 방법 | 결과 |
+|-----|------|------|-----------|------|
+| 73 | BEL | XBRL → 원문XML | XBRL 현재가치추정치 axis 합산; 교보·신한라이프·KB생명·메리츠·KB손보는 1분기 원문XML 파싱 | ✅ 12/12 |
+| 74 | RA | XBRL → 원문XML | 동일 | ✅ 12/12 |
+| 75 | CSM | XBRL → 원문XML | 동일 | ✅ 12/12 |
+| 76 | 신계약CSM | XBRL → 원문XML | XBRL `ChangesInFutureServicesDueToNewContracts...CSM` ; fallback 사업보고서 원문XML | ⚠️ 동양 MISS |
+| 77 | CSM 상각 | XBRL → 원문XML | XBRL 서비스이전 CSM axis ; fallback 원문XML | ⚠️ 동양 MISS |
+| 78 | CSM 조정 | XBRL → 원문XML | XBRL 추정치변동 CSM axis ; fallback 원문XML | ✅ 12/12 |
+| 79 | 보험금융손익(CSM) | XBRL → 원문XML | XBRL 보험금융손익 CSM axis ; fallback 원문XML | ⚠️ DB손보 MISS |
+| 80 | 전기말 CSM | XBRL → 원문XML | XBRL 전기말 context CSM ; fallback 원문XML | ⚠️ 삼성화재·DB손보 MISS |
+| 82 | CHECK | 계산 | Col80+76−77+78+79−75 | ⚠️ 구성항목 일부 MISS인 경우 오차 |
+
+---
+
+### CSM 기간별 기대수익인식금액
+
+| Col | 항목 | 소스 | 태그 / 방법 | 결과 |
+|-----|------|------|-----------|------|
+| 83~87 | 1년이하~10년초과 | 원문XML | 사업보고서 CSM 만기 테이블 파싱 | ⚠️ 교보·한화·동양·DB손보·삼성화재 OK / 나머지 7개사 MISS |
+| 88 | 합계 | 계산 | = Col75 | ✅ 11/11 |
+| 89 | CHECK | 계산 | Col88 − (Col83~87) | ⚠️ 동일 7개사 MISS |
+
+> **MISS 이유**: 신한라이프·삼성·미래에셋·KB라이프·현대해상·메리츠·KB손보의 사업보고서 원문 XML에  
+> CSM 기간별 테이블이 없음. 해당 데이터는 다른 경로(IR 자료 등) 에서 수동 입력 필요.
+
+---
+
+### K-ICS (지급여력비율)
+
+| Col | 항목 | 소스 | 태그 / 방법 | 결과 |
+|-----|------|------|-----------|------|
+| 92~94 | 잠정치 (비율·가용·요구) | 원문XML | 사업보고서 지급여력비율 테이블 | ⚠️ 삼성·KB라이프·삼성화재·현대해상·KB손보 MISS |
+| 95~97 | 최종치 (비율·가용·요구) | 원문XML | 동일 테이블 당기값 | ⚠️ 동일 5개사 + 한화 MISS |
+
+> **MISS 이유**: 사업보고서 제출 시점에 K-ICS가 아직 `산출중(-)` 상태인 회사 다수.  
+> → 해당 회사들은 이후 별도 공시 또는 1분기보고서에서 확인 필요.
+
+---
+
+### 해약환급금준비금
+
+| Col | 항목 | 소스 | 태그 / 방법 | 결과 |
+|-----|------|------|-----------|------|
+| 99 | 해약환급금준비금 | XBRL | `dart_SurrenderValueReserve` | ⚠️ 신한라이프·KB라이프 MISS |
+
+---
+
+### 손해율
+
+| Col | 항목 | 소스 | 태그 / 방법 | 결과 |
+|-----|------|------|-----------|------|
+| 101 | 예상손해율(A) | 원문XML | 보험금 예실차비율 테이블 `예상손해율` 항목 | ⚠️ 미래에셋·현대해상 MISS, 한화 소오차 |
+| 102 | 실제손해율(B) | 원문XML | 동일 테이블 `실제손해율` 항목 | ⚠️ 동일 |
+| 103 | 예실차비율(b−a) | 계산 | Col101 − Col102 | ⚠️ 동일 |
+| 104 | 실제/예상보험금 | 계산 | Col102 / Col101 | ⚠️ 동일 |
+| 107~109 | 손해율·위험보험료·사고보험금 | — | **추출 불가** | ❌ 전 회사 MISS |
+
+> **107~109 MISS 이유**: 위험보험료·사고보험금 절대값은 XBRL 태그가 없고, 원문 XML에서도  
+> 보험종류별로 분리되어 있어 합산 추출이 복잡함.
+
+---
+
+### 예실차 세부
+
+| Col | 항목 | 소스 | 결과 |
+|-----|------|------|------|
+| 111 | 예실차 합계 | — | ❌ 전 회사 MISS |
+| 112 | 보험금예실차 | — | ❌ 전 회사 MISS |
+| 113~114 | 예상/실제보험금 | — | ❌ 전 회사 MISS |
+| 115 | 사업비예실차 | — | ❌ 전 회사 MISS |
+| 116~117 | 예상/실제사업비 | — | ❌ 전 회사 MISS |
+
+> **MISS 이유**: DART XBRL에 예실차 관련 단독 태그 없음.  
+> 보험종류별 다차원 집계가 필요해 자동화 어려움. **수동 입력 필요.**
+
+---
+
+### 계리적 가정변경 민감도
+
+| Col | 항목 | 소스 | 태그 / 방법 | 결과 |
+|-----|------|------|-----------|------|
+| 146~150 | BEL+RA기준 (해지율·위험률·사업비·기타·물량) | XBRL → 원문XML | XBRL `dart_ChangeIn...Assumption...BEL` 3-dim ; fallback 원문XML 가정변경 테이블 | ⚠️ 동양·삼성화재 MISS, 한화 부호오류 |
+| 151 | (삼성화재·신한라이프 등 일부 항목) | — | ❌ MISS | |
+| 153~158 | CSM기준 (해지율~손실요소) | XBRL → 원문XML | XBRL `dart_ChangeIn...Assumption...CSM` 3-dim ; fallback 원문XML | ⚠️ 동양·삼성화재 MISS |
+| 159 | CHECK | — | ⚠️ 교보·삼성화재·현대해상 오차 |
+
+---
+
+## 전체 정확도 요약 (2512 기준)
+
+| 구분 | 건수 | 비율 |
+|------|-----:|-----:|
+| ✅ OK (오차 0.1% 이내) | 955 | 76% |
+| ⚠️ FAIL (오차 과다) | 57 | 5% |
+| ❌ MISS (미추출) | 243 | 19% |
+| **합계** | **1,255** | **100%** |
+
+---
+
+## 주요 한계 및 수동입력 필요 항목
+
+| 항목 | 이유 |
+|------|------|
+| Col107~117 (예실차·위험보험료) | XBRL 미제공, 원문 XML 집계 불가 |
+| Col83~87 (CSM 기간별) 일부 회사 | 사업보고서 원문 XML에 테이블 없음 |
+| Col92~97 (K-ICS) 일부 회사 | 사업보고서 제출 시 산출중 상태 |
+| Col22~23 (운용자산) 일부 회사 | 원문 XML에 테이블 없음 |
+| Col25~30 (OCI 세부잔액) 일부 회사 | XBRL context 구조 불일치 |
+| 2212 (2022년말) 전체 | IFRS17 이전 데이터, XBRL 미제공 |
+
+---
+
+## 파일 구조
+
+```
+parse_annual.py     실행 스크립트
+dart_api.py         DART OpenAPI 연동
+DATA_작업_빈칸.xlsx  채울 대상 Excel
+data/               XBRL·원문XML 캐시 (자동 생성)
+```
