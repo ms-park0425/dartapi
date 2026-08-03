@@ -20,6 +20,33 @@ python parse_annual.py --period 2412    # 2024년 12월 사업보고서
 
 ---
 
+## XBRL Taxonomy
+
+`data/taxonomy.csv` — XBRL 태그 ID와 한글명 매핑표. 각 회사 XBRL 다운로드 시 포함된 `*_lab-ko.xml`에서 자동 추출됩니다.
+
+| 분류 | prefix | 개수 | 설명 |
+|------|--------|-----:|------|
+| IFRS 표준 | `ifrs-full_` | 1,562 | IASB가 정의한 국제 표준 태그 |
+| DART 한국 추가 | `dart_` | 967 | 금융감독원이 보험업 특화로 추가 정의 |
+| 회사별 커스텀 | `entity{corp_code}_` | 10,844 | 각 회사가 자체 정의한 태그 (비표준) |
+
+> **표준 taxonomy**는 `ifrs-full_`과 `dart_` prefix인 2,529개입니다.  
+> `entity` prefix 태그는 특정 회사만 사용하는 커스텀 태그로, 다른 회사/연도에 적용되지 않습니다.
+
+**주요 활용 태그 예시:**
+
+| 항목 | 태그 |
+|------|------|
+| 총자산 | `ifrs-full_Assets` |
+| 보험계약부채 | `ifrs-full_InsuranceContractsIssuedThatAreLiabilities` |
+| 보험손익 | `ifrs-full_InsuranceServiceResult` |
+| 당기순이익 | `ifrs-full_ProfitLoss` |
+| 보험금융손익 | `dart_InsuranceFinanceIncomeFromInsuranceContractsIssuedRecognisedInProfitOrLoss` |
+| 신종자본증권 | `dart_HybridBonds` |
+| 보험계약마진(CSM) | `dart_ContractualServiceMargin` 등 |
+
+---
+
 ## 컬럼별 자동화 현황
 
 > **기준: 2512 (2025년 12월 사업보고서), 12개사**  
@@ -281,29 +308,3 @@ data/
   {회사명}/           XBRL·원문XML 캐시 (자동 생성)
 ```
 
----
-
-## XBRL Taxonomy
-
-`data/taxonomy.csv` — XBRL 태그 ID와 한글명 매핑표. 각 회사 XBRL 다운로드 시 포함된 `*_lab-ko.xml`에서 자동 추출됩니다.
-
-| 분류 | prefix | 개수 | 설명 |
-|------|--------|-----:|------|
-| IFRS 표준 | `ifrs-full_` | 1,562 | IASB가 정의한 국제 표준 태그 |
-| DART 한국 추가 | `dart_` | 967 | 금융감독원이 보험업 특화로 추가 정의 |
-| 회사별 커스텀 | `entity{corp_code}_` | 10,844 | 각 회사가 자체 정의한 태그 (비표준) |
-
-> **표준 taxonomy**는 `ifrs-full_`과 `dart_` prefix인 2,529개입니다.  
-> `entity` prefix 태그는 특정 회사만 사용하는 커스텀 태그로, 다른 회사/연도에 적용되지 않습니다.
-
-**주요 활용 태그 예시:**
-
-| 항목 | 태그 |
-|------|------|
-| 총자산 | `ifrs-full_Assets` |
-| 보험계약부채 | `ifrs-full_InsuranceContractsIssuedThatAreLiabilities` |
-| 보험손익 | `ifrs-full_InsuranceServiceResult` |
-| 당기순이익 | `ifrs-full_ProfitLoss` |
-| 보험금융손익 | `dart_InsuranceFinanceIncomeFromInsuranceContractsIssuedRecognisedInProfitOrLoss` |
-| 신종자본증권 | `dart_HybridBonds` |
-| 보험계약마진(CSM) | `dart_ContractualServiceMargin` 등 |
