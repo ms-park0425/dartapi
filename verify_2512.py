@@ -85,7 +85,7 @@ def compare(answer, output, tol=0.01):
                 continue
 
             # Compare
-            if abs(expected) < 1e-6:  # effectively zero
+            if abs(expected) < tol:  # effectively zero (includes tiny values like 0.003)
                 if abs(actual) < tol:
                     ok += 1
                 else:

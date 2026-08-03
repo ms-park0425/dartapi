@@ -100,6 +100,7 @@ OCI_MAPPING = {
         "ifrs-full_OtherComprehensiveIncomeNetOfTaxGainsLossesOnRevaluation",
         "ifrs-full_OtherComprehensiveIncomeNetOfTaxGainsLossesOnRevaluationOfPropertyPlantAndEquipment",
     ],
+    57: ["ifrs-full_OtherComprehensiveIncomeNetOfTaxCreditLossesOfFinancialAssetsMeasuredAtFairValueThroughOtherComprehensiveIncome"],
     61: ["ifrs-full_OtherComprehensiveIncomeNetOfTaxGainsLossesOnRemeasurementsOfDefinedBenefitPlans"],
     62: ["ifrs-full_OtherComprehensiveIncomeNetOfTaxExchangeDifferencesOnTranslation"],
 }
@@ -2132,7 +2133,9 @@ def _extract_loss_ratios(filepath):
 
     # Method 1: ACODE TE tag format (한화생명, 동양생명, DB손보)
     col_priority = {}  # col -> priority (0=Separate, 1=Consolidated)
+    # 더 구체적인 태그를 먼저, 덜 구체적인 것을 나중에 (fallback 순서)
     for kw, col in [("ExpectedLossRateOfInsuranceClaim", 101), ("ActualLossRateOfInsuranceMoney", 102),
+                    ("ActualLossRateOf", 102), ("ExpectedLossRateOf", 101),
                     ("ExpectedLossRatioOf", 101), ("ActualLossRatioOf", 102)]:
         for m in re.finditer(
             kw + r'[^"]*?"[^"]*?ACONTEXT="([^"]+)"[^>]*?>([0-9.]+)</TE>',
@@ -2145,7 +2148,8 @@ def _extract_loss_ratios(filepath):
                 continue
             priority = 0 if "SeparateMember" in ctx else 1
             if col not in result or priority < col_priority.get(col, 99):
-                result[col] = val if val <= 1 else val / 100
+                # 소수점 형식(0.86)이면 그대로, % 형식(86.0)이면 /100
+                result[col] = val if val <= 2 else val / 100
                 col_priority[col] = priority
 
     # Method 2: Table/text extraction
@@ -2830,6 +2834,29 @@ def extract_company_data(corp_name, year="2025", report_type="사업보고서", 
     surr = parse_surrender_reserve(xbrl_path, year, ref_date=ref_date, start_date=start_date)
     if surr is not None:
         result[99] = surr / 1e6
+    # fallback: doc.xml에서 '해약환급금준비금 잔액' 테이블 파싱
+    if 99 not in result and is_annual:
+        doc_path = _get_annual_doc(corp_name, year)
+        if doc_path:
+            try:
+                with open(doc_path, encoding='utf-8') as _f:
+                    _content = _f.read()
+                for _kw in ['해약환급금준비금 잔액', '해약환급금준비금잔액']:
+                    _idx = _content.find(_kw)
+                    if _idx >= 0:
+                        _region = _content[_idx:_idx+500]
+                        _clean = re.sub(r'<[^>]+>', '|', _region)
+                        _cells = [c.strip() for c in re.split(r'\|+', _clean) if c.strip()]
+                        for _v in _cells[1:5]:
+                            try:
+                                _n = float(_v.replace(',', ''))
+                                if _n > 100000:
+                                    result[99] = _n
+                                    break
+                            except: pass
+                        if 99 in result:
+                            break
+            except: pass
 
     # 추가 PL 항목 (중복 컬럼)
     for col, account_id in EXTRA_PL_MAPPING.items():
@@ -3208,7 +3235,7 @@ def main(year=None, period_code=None):
     if os.path.exists(excel_blank):
         try:
             import openpyxl as _xl
-            wb = _xl.load_workbook(excel_blank, data_only=True, keep_vba=False)
+            wb = _xl.load_workbook(excel_blank, keep_vba=False)  # 수식 유지를 위해 data_only=False
             ws = wb["DATA"]
 
             # row1: 컬럼번호 → Excel열 역매핑
@@ -3229,9 +3256,97 @@ def main(year=None, period_code=None):
                 if str(v2) == str(period_code) and v3:
                     short_to_row[str(v3)] = r
 
+            from openpyxl.utils import get_column_letter
+
+            def _addr(col_num, row):
+                """컬럼번호 → 셀주소 (예: 35, 12 → 'AI12')"""
+                ec = col_to_excel.get(col_num)
+                return f"{get_column_letter(ec)}{row}" if ec else None
+
+            # 계산 항목별 수식 생성 함수
+            def _formula(col_num, row):
+                a = _addr
+                r = row
+                if col_num == 14:   # 자본(신종제외) = Col15 - Col16
+                    c15, c16 = a(15,r), a(16,r)
+                    if c15 and c16: return f"={c15}-{c16}"
+                elif col_num == 9:   # FVPL 비중 = Col5/Col4
+                    c5, c4 = a(5,r), a(4,r)
+                    if c5 and c4: return f"={c5}/{c4}"
+                elif col_num == 10:  # FVOCI 비중 = Col6/Col4
+                    c6, c4 = a(6,r), a(4,r)
+                    if c6 and c4: return f"={c6}/{c4}"
+                elif col_num == 11:  # AC 비중 = Col7/Col4
+                    c7, c4 = a(7,r), a(4,r)
+                    if c7 and c4: return f"={c7}/{c4}"
+                elif col_num == 20:  # 기시자본(신종제외) = Col19 - (Col19*Col16/Col15 근사)
+                    pass  # 전기말 신종자본증권이 별도값이라 수식 불가
+                elif col_num == 24:  # OCI합계 = Col17
+                    c17 = a(17,r)
+                    if c17: return f"={c17}"
+                elif col_num == 31:  # OCI CHECK = Col24-(Col25+26+27+28+29+30)
+                    cols = [a(c,r) for c in [24,25,26,27,28,29,30]]
+                    if all(cols): return f"={cols[0]}-({cols[1]}+{cols[2]}+{cols[3]}+{cols[4]}+{cols[5]}+{cols[6]})"
+                elif col_num == 38:  # 금융손익 = Col35-Col36-Col37+Col39-Col40
+                    cs = [a(c,r) for c in [35,36,37,39,40]]
+                    if all(cs): return f"={cs[0]}-{cs[1]}-{cs[2]}+{cs[3]}-{cs[4]}"
+                elif col_num == 45:  # CHECK1 = Col41+Col42-Col43
+                    cs = [a(c,r) for c in [41,42,43]]
+                    if all(cs): return f"={cs[0]}+{cs[1]}-{cs[2]}"
+                elif col_num == 46:  # CHECK2 = Col36+Col37+Col38-Col39+Col40-Col35
+                    cs = [a(c,r) for c in [36,37,38,39,40,35]]
+                    if all(cs): return f"={cs[0]}+{cs[1]}+{cs[2]}-{cs[3]}+{cs[4]}-{cs[5]}"
+                elif col_num == 47:  # CHECK3 = Col32+Col35-Col41
+                    cs = [a(c,r) for c in [32,35,41]]
+                    if all(cs): return f"={cs[0]}+{cs[1]}-{cs[2]}"
+                elif col_num == 48:  # = Col32
+                    c32 = a(32,r)
+                    if c32: return f"={c32}"
+                elif col_num == 49:  # = Col35
+                    c35 = a(35,r)
+                    if c35: return f"={c35}"
+                elif col_num == 50:  # = Col42
+                    c42 = a(42,r)
+                    if c42: return f"={c42}"
+                elif col_num == 51:  # = Col48+Col49+Col50
+                    cs = [a(c,r) for c in [48,49,50]]
+                    if all(cs): return f"={cs[0]}+{cs[1]}+{cs[2]}"
+                elif col_num == 63:  # = Col17
+                    c17 = a(17,r)
+                    if c17: return f"={c17}"
+                elif col_num == 64:  # OCI 자본변동 CHECK
+                    cs = [a(c,r) for c in [63,55,56,57,58,59,60,61,62]]
+                    if cs[0] and cs[1]: return f"={cs[0]}-{cs[1]}-SUM({get_column_letter(col_to_excel.get(56,1))}{r}:{get_column_letter(col_to_excel.get(62,1))}{r})"
+                elif col_num == 68:  # = Col44
+                    c44 = a(44,r)
+                    if c44: return f"={c44}"
+                elif col_num == 71:  # = Col18
+                    c18 = a(18,r)
+                    if c18: return f"={c18}"
+                elif col_num == 82:  # CSM CHECK = Col80+76-77+78+79-75
+                    cs = [a(c,r) for c in [80,76,77,78,79,75]]
+                    if all(cs): return f"={cs[0]}+{cs[1]}-{cs[2]}+{cs[3]}+{cs[4]}-{cs[5]}"
+                elif col_num == 88:  # = Col75
+                    c75 = a(75,r)
+                    if c75: return f"={c75}"
+                elif col_num == 89:  # CSM기간별 CHECK = Col88-SUM(83:87)
+                    c88 = a(88,r)
+                    c83 = col_to_excel.get(83); c87 = col_to_excel.get(87)
+                    if c88 and c83 and c87: return f"={c88}-SUM({get_column_letter(c83)}{r}:{get_column_letter(c87)}{r})"
+                elif col_num == 103:  # = Col101-Col102
+                    cs = [a(c,r) for c in [101,102]]
+                    if all(cs): return f"={cs[0]}-{cs[1]}"
+                elif col_num == 104:  # = Col102/Col101
+                    cs = [a(c,r) for c in [102,101]]
+                    if all(cs): return f"={cs[0]}/{cs[1]}"
+                return None
+
+            # 수식으로 넣을 컬럼 번호 집합
+            FORMULA_COLS = {9,10,11,14,24,31,38,45,46,47,48,49,50,51,63,64,68,71,82,88,89,103,104}
+
             filled = 0
             for key, data in all_results.items():
-                short = key[len(str(period_code)):]  # "2512미래" -> "미래"
+                short = key[len(str(period_code)):]
                 row_idx = short_to_row.get(short)
                 if row_idx is None:
                     continue
@@ -3242,9 +3357,19 @@ def main(year=None, period_code=None):
                     if ec is None:
                         continue
                     cell = ws.cell(row=row_idx, column=ec)
-                    if cell.data_type != "f":
-                        cell.value = val
-                        filled += 1
+                    if cell.data_type == "f":
+                        continue
+
+                    # 계산 항목은 수식으로 넣기
+                    if col_num in FORMULA_COLS:
+                        formula = _formula(col_num, row_idx)
+                        if formula:
+                            cell.value = formula
+                            filled += 1
+                            continue
+
+                    cell.value = val
+                    filled += 1
 
             wb.save(excel_blank)
             print(f"Excel 채우기 완료: {excel_blank} ({filled}셀)")

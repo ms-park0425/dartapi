@@ -20,7 +20,11 @@ python parse_annual.py --period 2412    # 2024년 12월 사업보고서
 
 ---
 
-## 컬럼별 자동화 현황 (2512 기준, 12개사)
+## 컬럼별 자동화 현황
+
+> **기준: 2512 (2025년 12월 사업보고서), 12개사**  
+> 분기/반기 보고서(2503·2506·2509)는 BS·PL 기본 항목 위주로 추출되며, 사업보고서 전용 항목(CSM변동·K-ICS·예실차 등)은 연간 보고서에서만 추출됩니다.  
+> 전년도(2312·2412)는 전체적으로 유사하나, 일부 XBRL 태그 구조 차이로 정확도가 낮을 수 있습니다.
 
 아래에서 **소스**는 데이터를 어디서 가져오는지를 나타냅니다.
 
@@ -58,8 +62,10 @@ python parse_annual.py --period 2412    # 2024년 12월 사업보고서
 | 22 | 운용자산 | 원문XML | 운용자산/자산운용률 테이블 `운용자산(B)` | ⚠️ 삼성·삼성화재·현대해상·KB손보 MISS |
 | 23 | 자산운용률 | 원문XML | 운용자산/자산운용률 테이블 `자산운용률(B/A)` | ⚠️ 삼성·삼성화재·현대해상·KB손보 MISS |
 
-> **MISS 이유**: 해당 회사들의 사업보고서 원문 XML에 운용자산 테이블이 포함되지 않음.  
-> → 사업보고서 PDF나 경영공시 별도 확인 필요.
+> **정의**: 보험업감독업무시행세칙 기준 — 특별계정자산 제외 총자산(Col21), 비운용자산 제외 운용자산(Col22)  
+> **MISS 이유**: 삼성생명·삼성화재·현대해상·KB손보는 사업보고서 원문 XML에 해당 테이블 미포함.  
+> XBRL 총자산에는 특별계정자산이 포함되어 있어 단순 태그 매핑으로는 추출 불가.  
+> → 감독원 업무보고서 또는 회사 IR 자료에서 수동 확인 필요.
 
 ---
 
@@ -68,16 +74,16 @@ python parse_annual.py --period 2412    # 2024년 12월 사업보고서
 | Col | 항목 | 소스 | 태그 / 방법 | 결과 |
 |-----|------|------|-----------|------|
 | 24 | OCI 합계 | 계산 | = Col17 | ✅ 12/12 |
-| 25 | FVOCI 평가손익 | XBRL→원문XML | OCI 3-dim context `FinancialAssets` 키워드 멤버 합산 | ⚠️ 신한라이프·KB라이프·DB손보 MISS |
-| 26 | 보험계약 금융손익 | XBRL→원문XML | OCI 3-dim `InsuranceContract` 키워드 멤버 | ⚠️ 5개사 MISS |
-| 27 | 재보험계약 금융손익 | XBRL→원문XML | OCI 3-dim `ReinsuranceFinance` 키워드 멤버 | ⚠️ 8개사 MISS, 교보 오차 |
-| 28 | 현금흐름위험회피 | XBRL→원문XML | OCI 3-dim `CashFlowHedges` 키워드 멤버 | ⚠️ 6개사 MISS |
-| 29 | 재평가잉여금 | XBRL→원문XML | **전기말** OCI `Revaluation` 키워드 멤버 | ⚠️ 3개사 MISS |
-| 30 | 확정급여부채 재측정 | XBRL→원문XML | OCI 3-dim `RemeasurementsOfDefinedBenefit` 키워드 멤버 | ⚠️ 4개사 MISS |
+| 25 | FVOCI 평가손익 | XBRL→원문XML | XBRL 재무상태표 기타포괄손익 항목 중 FVOCI 금융자산 평가손익 잔액. fallback: 사업보고서 자본 세부 테이블의 `공정가치측정금융자산평가손익` 행 | ⚠️ 신한라이프·KB라이프·DB손보 MISS |
+| 26 | 보험계약 금융손익 | XBRL→원문XML | XBRL 재무상태표 보험계약 관련 OCI 잔액. fallback: 자본 세부 테이블의 `보험계약 관련 금융손익` 행 | ⚠️ 5개사 MISS |
+| 27 | 재보험계약 금융손익 | XBRL→원문XML | XBRL 재무상태표 재보험계약 관련 OCI 잔액. fallback: 자본 세부 테이블의 `재보험계약 관련 금융손익` 행 | ⚠️ 8개사 MISS |
+| 28 | 현금흐름위험회피 | XBRL→원문XML | XBRL 재무상태표 현금흐름위험회피 파생상품 OCI 잔액. fallback: 자본 세부 테이블의 `현금흐름위험회피` 행 | ⚠️ 6개사 MISS |
+| 29 | 재평가잉여금 | XBRL→원문XML | XBRL 재무상태표 **전기말** 재평가잉여금 잔액. fallback: 자본 세부 테이블의 `재평가잉여금` 행 | ⚠️ 3개사 MISS |
+| 30 | 확정급여부채 재측정 | XBRL→원문XML | XBRL 재무상태표 확정급여부채 재측정요소 OCI 잔액. fallback: 자본 세부 테이블의 `확정급여채무 재측정요소` 행 | ⚠️ 4개사 MISS |
 | 31 | CHECK | 계산 | Col24 − (Col25+…+Col30) | ⚠️ 세부항목 모두 있을 때만 |
 
-> **MISS 이유**: XBRL에서 회사마다 OCI 세부항목의 3-dim context 구조가 달라 일부 회사는 매핑 불가.  
-> → 자본변동표 원문 XML에서 추출 가능하나, 회사별 테이블 구조 다름.
+> **MISS 이유**: XBRL 재무상태표에서 OCI 세부항목이 회사마다 다른 방식으로 구분·보고되어 일부 회사는 자동 매핑 불가.  
+> 이런 경우 사업보고서 원문 XML의 자본변동표 자본 구성 테이블에서 추출하나, 그것도 없는 회사는 수동 입력 필요.
 
 ---
 
@@ -137,14 +143,14 @@ python parse_annual.py --period 2412    # 2024년 12월 사업보고서
 
 | Col | 항목 | 소스 | 태그 / 방법 | 결과 |
 |-----|------|------|-----------|------|
-| 73 | BEL | XBRL → 원문XML | XBRL 현재가치추정치 axis 합산; 교보·신한라이프·KB생명·메리츠·KB손보는 1분기 원문XML 파싱 | ✅ 12/12 |
+| 73 | BEL | XBRL → 원문XML | XBRL 보험계약 주석의 BEL 구성요소 합계. 교보·신한라이프·KB생명·메리츠·KB손보는 XBRL에 BEL/RA/CSM 분리 데이터 없어 1분기보고서 원문XML의 구성요소 테이블에서 파싱 | ✅ 12/12 |
 | 74 | RA | XBRL → 원문XML | 동일 | ✅ 12/12 |
 | 75 | CSM | XBRL → 원문XML | 동일 | ✅ 12/12 |
-| 76 | 신계약CSM | XBRL → 원문XML | XBRL `ChangesInFutureServicesDueToNewContracts...CSM` ; fallback 사업보고서 원문XML | ⚠️ 동양 MISS |
-| 77 | CSM 상각 | XBRL → 원문XML | XBRL 서비스이전 CSM axis ; fallback 원문XML | ⚠️ 동양 MISS |
-| 78 | CSM 조정 | XBRL → 원문XML | XBRL 추정치변동 CSM axis ; fallback 원문XML | ✅ 12/12 |
-| 79 | 보험금융손익(CSM) | XBRL → 원문XML | XBRL 보험금융손익 CSM axis ; fallback 원문XML | ⚠️ DB손보 MISS |
-| 80 | 전기말 CSM | XBRL → 원문XML | XBRL 전기말 context CSM ; fallback 원문XML | ⚠️ 삼성화재·DB손보 MISS |
+| 76 | 신계약CSM | XBRL → 원문XML | XBRL 보험계약 변동 주석의 신계약 CSM 항목. fallback: 사업보고서 원문XML의 CSM 변동표 `신계약` 행 | ⚠️ 동양 MISS |
+| 77 | CSM 상각 | XBRL → 원문XML | XBRL 보험계약 변동 주석의 서비스이전 상각 항목. fallback: 원문XML CSM 변동표 `보험계약마진 상각` 행 | ⚠️ 동양 MISS |
+| 78 | CSM 조정 | XBRL → 원문XML | XBRL 보험계약 변동 주석의 추정치 변동 조정 항목. fallback: 원문XML CSM 변동표 `추정치 변동` 행 | ✅ 12/12 |
+| 79 | 보험금융손익(CSM) | XBRL → 원문XML | XBRL 보험계약 변동 주석의 보험금융손익 항목. fallback: 원문XML CSM 변동표 `보험금융손익` 행 | ⚠️ DB손보 MISS |
+| 80 | 전기말 CSM | XBRL → 원문XML | XBRL 전기말 보험계약부채의 CSM 잔액. fallback: 원문XML CSM 변동표 `기초` 행 | ⚠️ 삼성화재·DB손보 MISS |
 | 82 | CHECK | 계산 | Col80+76−77+78+79−75 | ⚠️ 구성항목 일부 MISS인 경우 오차 |
 
 ---
@@ -216,21 +222,37 @@ python parse_annual.py --period 2412    # 2024년 12월 사업보고서
 
 | Col | 항목 | 소스 | 태그 / 방법 | 결과 |
 |-----|------|------|-----------|------|
-| 146~150 | BEL+RA기준 (해지율·위험률·사업비·기타·물량) | XBRL → 원문XML | XBRL `dart_ChangeIn...Assumption...BEL` 3-dim ; fallback 원문XML 가정변경 테이블 | ⚠️ 동양·삼성화재 MISS, 한화 부호오류 |
-| 151 | (삼성화재·신한라이프 등 일부 항목) | — | ❌ MISS | |
-| 153~158 | CSM기준 (해지율~손실요소) | XBRL → 원문XML | XBRL `dart_ChangeIn...Assumption...CSM` 3-dim ; fallback 원문XML | ⚠️ 동양·삼성화재 MISS |
+| 146~150 | BEL+RA기준 (해지율·위험률·사업비·기타·물량) | XBRL → 원문XML | XBRL 보험계약 주석의 가정변경 효과 중 BEL+RA 기준 항목. fallback: 사업보고서 원문XML의 가정변경효과 테이블 | ⚠️ 동양·삼성화재 MISS, 한화 부호오류 |
+| 151 | 기타 감응도 | — | ❌ MISS (일부 회사만 공시, 자동화 불가) | |
+| 153~158 | CSM기준 (해지율~손실요소) | XBRL → 원문XML | XBRL 보험계약 주석의 가정변경 효과 중 CSM 기준 항목. fallback: 사업보고서 원문XML의 가정변경효과 테이블 | ⚠️ 동양·삼성화재 MISS |
 | 159 | CHECK | — | ⚠️ 교보·삼성화재·현대해상 오차 |
 
 ---
 
-## 전체 정확도 요약 (2512 기준)
+## 전체 정확도 요약
 
-| 구분 | 건수 | 비율 |
-|------|-----:|-----:|
-| ✅ OK (오차 0.1% 이내) | 955 | 76% |
-| ⚠️ FAIL (오차 과다) | 57 | 5% |
-| ❌ MISS (미추출) | 243 | 19% |
-| **합계** | **1,255** | **100%** |
+정답 데이터(`202512_동업사 공시비교_DATA_작업_260320.xlsx`)와 비교한 결과입니다.  
+오차 허용 기준: **0.1% 이내** = OK, 초과 = FAIL, 미추출 = MISS
+
+| 기간 | 보고서 종류 | 비교 가능 건수 | OK | FAIL | MISS | **OK율** |
+|------|-----------|-------------:|---:|-----:|-----:|--------:|
+| 2212 | 2022년 사업보고서 | 170 | 0 | 0 | 170 | **0%** |
+| 2312 | 2023년 사업보고서 | 1,095 | 455 | 199 | 441 | **42%** |
+| 2412 | 2024년 사업보고서 | 1,219 | 716 | 75 | 428 | **59%** |
+| 2503 | 2025년 1분기 | 1,033 | 558 | 43 | 432 | **54%** |
+| 2506 | 2025년 반기 | 1,059 | 512 | 97 | 450 | **48%** |
+| 2509 | 2025년 3분기 | 1,058 | 577 | 52 | 429 | **55%** |
+| 2512 | 2025년 사업보고서 | 1,255 | 955 | 57 | 243 | **76%** |
+| **합계** | | **6,889** | **3,773** | **523** | **2,593** | **55%** |
+
+**기간별 특이사항**
+
+- **2212 (0%)**: IFRS17 전환 이전 데이터로 DART에 XBRL 미제공. 자동화 불가.
+- **2312 (42%)**: 전기말(2022년말) 참조 항목에서 오차 다수 — 2022년 XBRL이 없어 이전기 비교수치가 불일치.
+- **2412~2509 (48~59%)**: BS·PL 기본 항목은 잘 추출되나, 사업보고서 전용 항목(CSM변동·K-ICS·운용자산·감응도 등) 미추출로 MISS 많음.
+- **2512 (76%)**: 사업보고서 전용 항목까지 포함해 가장 높은 정확도. 주요 MISS는 예실차 세부(XBRL 미제공)·일부 CSM기간별·OCI 세부잔액.
+
+> **Excel 주황색 셀**: 정답과 0.1% 이상 차이나는 셀 (FAIL). 빈 셀은 미추출(MISS).
 
 ---
 
@@ -242,7 +264,7 @@ python parse_annual.py --period 2412    # 2024년 12월 사업보고서
 | Col83~87 (CSM 기간별) 일부 회사 | 사업보고서 원문 XML에 테이블 없음 |
 | Col92~97 (K-ICS) 일부 회사 | 사업보고서 제출 시 산출중 상태 |
 | Col22~23 (운용자산) 일부 회사 | 원문 XML에 테이블 없음 |
-| Col25~30 (OCI 세부잔액) 일부 회사 | XBRL context 구조 불일치 |
+| Col25~30 (OCI 세부잔액) 일부 회사 | XBRL에서 회사마다 항목 분류 방식이 달라 자동 매핑 불가 |
 | 2212 (2022년말) 전체 | IFRS17 이전 데이터, XBRL 미제공 |
 
 ---
@@ -250,8 +272,38 @@ python parse_annual.py --period 2412    # 2024년 12월 사업보고서
 ## 파일 구조
 
 ```
-parse_annual.py     실행 스크립트
-dart_api.py         DART OpenAPI 연동
-DATA_작업_빈칸.xlsx  채울 대상 Excel
-data/               XBRL·원문XML 캐시 (자동 생성)
+parse_annual.py       실행 스크립트
+dart_api.py           DART OpenAPI 연동
+DATA_작업_빈칸.xlsx    채울 대상 Excel
+data/
+  taxonomy.csv        XBRL 태그 한글명 매핑 (자동 생성)
+  xbrl_taxonomy.xlsx  taxonomy Excel 버전
+  {회사명}/           XBRL·원문XML 캐시 (자동 생성)
 ```
+
+---
+
+## XBRL Taxonomy
+
+`data/taxonomy.csv` — XBRL 태그 ID와 한글명 매핑표. 각 회사 XBRL 다운로드 시 포함된 `*_lab-ko.xml`에서 자동 추출됩니다.
+
+| 분류 | prefix | 개수 | 설명 |
+|------|--------|-----:|------|
+| IFRS 표준 | `ifrs-full_` | 1,562 | IASB가 정의한 국제 표준 태그 |
+| DART 한국 추가 | `dart_` | 967 | 금융감독원이 보험업 특화로 추가 정의 |
+| 회사별 커스텀 | `entity{corp_code}_` | 10,844 | 각 회사가 자체 정의한 태그 (비표준) |
+
+> **표준 taxonomy**는 `ifrs-full_`과 `dart_` prefix인 2,529개입니다.  
+> `entity` prefix 태그는 특정 회사만 사용하는 커스텀 태그로, 다른 회사/연도에 적용되지 않습니다.
+
+**주요 활용 태그 예시:**
+
+| 항목 | 태그 |
+|------|------|
+| 총자산 | `ifrs-full_Assets` |
+| 보험계약부채 | `ifrs-full_InsuranceContractsIssuedThatAreLiabilities` |
+| 보험손익 | `ifrs-full_InsuranceServiceResult` |
+| 당기순이익 | `ifrs-full_ProfitLoss` |
+| 보험금융손익 | `dart_InsuranceFinanceIncomeFromInsuranceContractsIssuedRecognisedInProfitOrLoss` |
+| 신종자본증권 | `dart_HybridBonds` |
+| 보험계약마진(CSM) | `dart_ContractualServiceMargin` 등 |
