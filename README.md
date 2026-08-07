@@ -62,64 +62,66 @@ IFRS17은 어떤 필터를 얼마나 걸지 회사 재량이라, **같은 항목
 
 #### DATA 시트 Col75 (CSM 잔액) — 같은 숫자를 찾는 필터가 회사마다 다르다
 
-**삼성생명 — 필터 2개 (2-dim)**
+**삼성생명 — 2-dim: 필터 2개, 값 하나로 바로 저장**
 
 ```
-필터① 재무제표 종류  = 별도
-필터② 보험계약 구분  = CSM
+필터① 재무제표 종류  = 별도 (SeparateMember)
+필터② 보험계약 구분  = 발행계약 전체 (InsuranceContractsIssuedMember)
+      + 태그 자체가 ContractualServiceMargin → CSM임을 의미
 ```
 
+실제 XBRL:
 ```xml
-<xbrldi:explicitMember dimension="ConsolidatedAndSeparateFinancialStatementsAxis">SeparateMember</xbrldi:explicitMember>
-<xbrldi:explicitMember dimension="DisaggregationOfInsuranceContractsAxis">ContractualServiceMarginMember</xbrldi:explicitMember>
-
-→ InsuranceContractsLiabilityAsset = 13,217,874 (백만원)
+<ifrs-full:ContractualServiceMargin
+  contextRef="CFY2025eFY_..._SeparateMember_..._InsuranceContractsIssuedMember"
+  decimals="-6">13217874000000</ifrs-full:ContractualServiceMargin>
 ```
-
-**교보생명 — 필터 3개 (3-dim)**
-
-```
-필터① 재무제표 종류  = 별도
-필터② 보험계약 구분  = 발행계약 전체
-필터③ 구성요소       = CSM             ← 필터 하나 더 필요
-```
-
+contextRef가 가리키는 context 정의:
 ```xml
-<xbrldi:explicitMember dimension="ConsolidatedAndSeparateFinancialStatementsAxis">SeparateMember</xbrldi:explicitMember>
-<xbrldi:explicitMember dimension="DisaggregationOfInsuranceContractsAxis">InsuranceContractsIssuedMember</xbrldi:explicitMember>
-<xbrldi:explicitMember dimension="InsuranceContractsByComponentsAxis">ContractualServiceMarginMember</xbrldi:explicitMember>
-
-→ InsuranceContractsThatAreLiabilities = 6,510,962 (백만원)
+<xbrldi:explicitMember dimension="ConsolidatedAndSeparateFinancialStatementsAxis">ifrs-full:SeparateMember</xbrldi:explicitMember>
+<xbrldi:explicitMember dimension="DisaggregationOfInsuranceContractsAxis">ifrs-full:InsuranceContractsIssuedMember</xbrldi:explicitMember>
 ```
+→ **13,217,874,000,000원 = 13,217,874 백만원** ✅
 
-**현대해상 — 필터 6개 (6-dim), 보험종류별로 쪼개져 있어 합산 필요**
+---
+
+**현대해상 — 5-dim: 필터 5개, 값 하나로 저장 (내부적으로는 6-dim 세부 내역도 병존)**
 
 ```
 필터① 재무제표 종류  = 별도
 필터② 보험계약 구분  = 발행계약 전체
-필터③ 회계모형       = PAA 미적용
-필터④ 구성요소       = CSM
-필터⑤ 잔여보장       = LRC
-필터⑥ 보험종류       = 장기보험 (비배당)  →  8,868,911,078,887 원
-       보험종류       = 장기보험 (배당)    →    108,930,990,435 원
-       보험종류       = 일반보험           →                  0 원
-       보험종류       = 자동차보험         →                  0 원
-                                          ───────────────────────
-                                합계       8,977,842,069,322 원 = 8,977,842 (백만원) ✅
+필터③ 회계모형       = PAA 미적용 계약
+필터④ 잔여보장       = LRC (잔여보장부채)
+필터⑤ 구성요소       = CSM
 ```
 
+실제 XBRL (5-dim 합계 태그):
 ```xml
-<!-- 필터⑥이 보험종류마다 달라지는 6개짜리 context가 여러 개 존재 -->
-<xbrldi:explicitMember dimension="ConsolidatedAndSeparateFinancialStatementsAxis">SeparateMember</xbrldi:explicitMember>
-<xbrldi:explicitMember dimension="DisaggregationOfInsuranceContractsAxis">InsuranceContractsIssuedMember</xbrldi:explicitMember>
-<xbrldi:explicitMember dimension="InsuranceContractsAxis">InsuranceContractsOtherThanPremiumAllocationApproachMember</xbrldi:explicitMember>
-<xbrldi:explicitMember dimension="InsuranceContractsByComponentsAxis">ContractualServiceMarginMember</xbrldi:explicitMember>
-<xbrldi:explicitMember dimension="InsuranceContractsByRemainingCoverageAndIncurredClaimsAxis">LiabilitiesForRemainingCoverageMember</xbrldi:explicitMember>
-<xbrldi:explicitMember dimension="TypesOfContractsAxis">LongtermInsuranceMember</xbrldi:explicitMember>  ← 보험종류마다 다름
+<ifrs-full:InsuranceContractsLiabilityAsset
+  contextRef="CFY2025eFY_..._SeparateMember_..._InsuranceContractsIssuedMember_..._InsuranceContractsOtherThanThoseToWhichPremiumAllocationApproachHasBeenAppliedMember_..._LiabilitiesForRemainingCoverageMember_..._ContractualServiceMarginMember"
+  decimals="0">8977842069322</ifrs-full:InsuranceContractsLiabilityAsset>
+```
+contextRef가 가리키는 context 정의:
+```xml
+<xbrldi:explicitMember dimension="ConsolidatedAndSeparateFinancialStatementsAxis">ifrs-full:SeparateMember</xbrldi:explicitMember>
+<xbrldi:explicitMember dimension="DisaggregationOfInsuranceContractsAxis">ifrs-full:InsuranceContractsIssuedMember</xbrldi:explicitMember>
+<xbrldi:explicitMember dimension="InsuranceContractsAxis">ifrs-full:InsuranceContractsOtherThanThoseToWhichPremiumAllocationApproachHasBeenAppliedMember</xbrldi:explicitMember>
+<xbrldi:explicitMember dimension="InsuranceContractsByRemainingCoverageAndIncurredClaimsAxis">dart:LiabilitiesForRemainingCoverageMember</xbrldi:explicitMember>
+<xbrldi:explicitMember dimension="InsuranceContractsByComponentsAxis">ifrs-full:ContractualServiceMarginMember</xbrldi:explicitMember>
+```
+→ **8,977,842,069,322원 = 8,977,842 백만원** ✅
+
+같은 파일 안에 6-dim 세부 내역도 함께 존재 (필터⑤ 뒤에 보험종류 필터가 추가됨):
+```
+장기보험 (비배당) → 8,868,911,078,887 원
+장기보험 (배당)   →   108,930,990,435 원
+일반보험          →               0 원
+자동차보험        →               0 원
+                 ───────────────────────
+                   8,977,842,069,322 원  ← 5-dim 합계와 일치
 ```
 
-현대해상처럼 보험종류별로 쪼갠 회사는 스크립트가 해당하는 모든 context를 찾아 더해야 최종 값이 나옵니다.  
-스크립트는 2-dim → 3-dim → 5~6-dim 패턴을 순서대로 시도합니다.
+스크립트는 5-dim 합계 태그를 직접 읽고, 없는 경우 6-dim 세부를 합산하는 방식으로 동작합니다.
 
 #### OCI 세부잔액 (Col25~30) — 3번째 axis 이름이 회사마다 달라서 MISS 발생
 
