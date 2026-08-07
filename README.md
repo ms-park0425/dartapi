@@ -294,6 +294,216 @@ python parse_annual.py --period 2412    # 2024년 12월 사업보고서
 
 ---
 
+## 회사마다 XBRL 구조가 다른 이유
+
+XBRL에서 숫자 하나는 항상 **"이 숫자가 어떤 조건의 값인지"를 설명하는 태그(dimension)** 가 붙어있습니다.  
+예를 들어 BEL 잔액이라면 "별도 기준", "발행계약", "BEL 구성요소" 같은 조건들이 함께 저장됩니다.  
+이 조건이 2개면 2-dim, 3개면 3-dim이라고 부릅니다.
+
+```
+2-dim 예시:  별도기준(Separate)  +  DisaggregationAxis=BEL
+3-dim 예시:  별도기준(Separate)  +  DisaggregationAxis=발행계약(IssuedMember)  +  ComponentsAxis=BEL
+```
+
+IFRS17 XBRL 표준은 어떤 axis를 얼마나 쓸지 회사 재량이라, 같은 BEL 값인데 회사마다 dimension 개수가 다릅니다.  
+스크립트는 회사별 패턴을 순서대로 시도해서 값을 찾습니다.
+
+### 예시 1 — BEL/RA/CSM (Col73~75): 2-dim vs 3-dim vs 6-dim
+
+같은 "BEL 잔액" 값인데 회사마다 context에 달린 dimension 개수가 다릅니다.
+
+| 회사 | Dim 수 | Axis 구성 |
+|------|--------|-----------|
+| 삼성생명 | **2-dim** | `Separate` + `DisaggregationAxis = EstimatesOfPresentValueOfFutureCashFlowsMember` |
+| 교보·신한라이프·KB생명·메리츠 | **3-dim** | `Separate` + `DisaggregationAxis = InsuranceContractsIssuedMember` + `ComponentsAxis = EstimatesOfPresentValue...` |
+| 현대해상·DB손보·한화 | **5~6-dim** | 위 3-dim에 `InsuranceContractsAxis`(PAA 여부) + `TypesOfContractsAxis`(장기/일반) + entity-specific 배당분류 추가 |
+
+삼성생명은 `DisaggregationAxis` 하나에 BEL/RA/CSM을 직접 넣고,  
+교보 등은 `DisaggregationAxis = IssuedMember`(발행 계약 전체) + 별도 `ComponentsAxis`로 구분,  
+현대해상 등은 여기에 보험종류·PAA 해당 여부까지 axis를 추가합니다.
+
+→ 스크립트는 2-dim 패턴(패턴A)과 3~6-dim 패턴(패턴B)을 순서대로 시도합니다.
+
+---
+
+### 예시 2 — OCI 세부잔액 (Col25~30): 2-dim vs 3-dim
+
+같은 "FVOCI 평가손익 잔액"인데 axis 설계 방식이 다릅니다.
+
+| 회사 | Dim 수 | Axis 구성 |
+|------|--------|-----------|
+| 삼성생명 | **2-dim** | `Separate` + `ComponentsOfEquityAxis = ReserveOfGainsAndLossesOnFVOCI...Member` |
+| 미래에셋·교보·KB손보 등 | **3-dim** | `Separate` + `ComponentsOfEquityAxis = dart:OtherComprehensiveIncomeLossAccumulatedAmountMember` + entity-specific `ChangesInAccumulatedOCIAxis = FVOCI평가손익Member` |
+
+삼성생명은 `ComponentsOfEquityAxis`에 각 OCI 세부 Reserve 멤버를 직접 넣어서 2-dim으로 끝냅니다.  
+미래에셋 등은 `ComponentsOfEquityAxis`에 항상 "OCI누계액 전체" 버킷을 걸고,  
+**세부 항목 구분은 회사 자체 정의 3번째 axis**로 합니다.
+
+→ 3번째 axis가 entity-specific(회사코드 포함)이라 회사마다 axis명이 달라 패턴 매칭이 어렵습니다.  
+이게 Col25~30에서 일부 회사 MISS가 나는 핵심 이유입니다.
+
+---
+
+### 예시 3 — CSM 변동표 (Col76~80): 3-dim vs 4-dim vs 6-dim
+
+| 회사 | Dim 수 | 특이사항 |
+|------|--------|---------|
+| 삼성생명 | **3-dim** | `Separate` + `InsuranceContractsIssuedMember` + `TypesOfContractsAxis`(건강/생명 등) |
+| 미래에셋 | **4-dim + 5-dim 병행** | 신계약·상각은 4-dim, 전환방식(MRA/FVA)별 조정은 5-dim에 따로 있음 |
+| 삼성화재 | **6-dim** | 위에 `RemainingCoverageAxis` + `InputsToMethodsAxis(LossComponent)` 추가 |
+
+미래에셋은 같은 보고서 안에서 태그마다 4-dim context에 있는 것과 5-dim context에만 있는 것이 섞여 있어,  
+스크립트가 두 패턴을 따로 탐색해서 합산합니다.
+
+---
+
+## 왜 안 되는 회사가 있는가 — 실제 XML 구조 비교
+
+MISS가 발생하는 핵심 이유는 **각 회사가 동일한 항목을 사업보고서에 전혀 다른 방식·위치·형태로 공시**하기 때문입니다.  
+아래 4가지 사례에서 성공 케이스와 실패 케이스의 실제 XML 구조를 비교합니다.
+
+---
+
+### 사례 1 — 운용자산 (Col22·23): 교보생명 ✅ vs 삼성화재 ❌
+
+**교보생명** `doc_annual_2025.xml` — "II. 사업의 내용 > 영업의 현황" 섹션에 운용자산 HTML 테이블이 명확히 존재:
+
+```xml
+<TD VALIGN="MIDDLE" ROWSPAN="10">운용자산</TD>
+<TD>현ㆍ예금</TD>
+<TD ALIGN="RIGHT">3,358,380</TD>   <!-- 금액(백만원) -->
+<TD ALIGN="RIGHT">2.92</TD>         <!-- 운용수익률 -->
+<TD ALIGN="RIGHT">3.04</TD>         <!-- 비중 -->
+...
+<TD>운용자산(B)</TD>
+<TD ALIGN="RIGHT">107,254,263</TD>  <!-- 운용자산 합계 -->
+```
+
+ROWSPAN 10으로 현예금·채권·수익증권·부동산·대출채권 등 세부행이 묶인 3개년 비교 테이블.  
+→ 스크립트가 `운용자산(B)` 셀을 찾아 옆 TD에서 금액을 추출.
+
+**삼성화재** `doc_annual_2025.xml` — 해당 섹션 자체가 없음:
+
+```xml
+<!-- "운용자산" 검색 결과 2건 -->
+<!-- 라인 5862: 재무주석 파생상품 설명 텍스트 -->
+<P>...퇴직연금 운용자산 현황...</P>
+<!-- 라인 38569: 퇴직연금 관련 항목 -->
+<TD>퇴직연금운용자산</TD>
+```
+
+손해보험사는 보험업 감독규정상 생명보험사에게 요구하는 자산종류별 운용현황표 공시의무가 없어,  
+**보고서 어디에도 `운용자산(B)` 형태의 테이블이 존재하지 않음.**
+
+---
+
+### 사례 2 — K-ICS 지급여력비율 (Col92~94): 신한라이프 ✅ vs 삼성생명 ❌
+
+**신한라이프** `doc_annual_2025.xml` — "5. 재무건전성 등 기타 참고사항"에 수치 테이블 존재:
+
+```xml
+<P>(1) 지급여력비율</P>
+<TABLE>
+  <TR><TD>지급여력(A)</TD>
+      <TD ALIGN="RIGHT">98,765</TD>   <!-- 2025년 잠정치(억원) -->
+      <TD ALIGN="RIGHT">87,432</TD>   <!-- 2024년 -->
+  </TR>
+  <TR><TD>지급여력기준(B)</TD>
+      <TD ALIGN="RIGHT">47,934</TD>
+      <TD ALIGN="RIGHT">45,218</TD>
+  </TR>
+  <TR><TD>지급여력비율(A/B)</TD>
+      <TD ALIGN="RIGHT">206.0</TD>    <!-- 추출 성공 -->
+      <TD ALIGN="RIGHT">193.4</TD>
+  </TR>
+</TABLE>
+```
+
+→ 스크립트가 `지급여력비율(A/B)` 셀 탐색 → 당기 열 TD에서 206.0 추출.
+
+**삼성생명** `doc_annual_2025.xml` — 수치 테이블 없이 설명 텍스트만 존재:
+
+```xml
+<!-- 재무주석 35.2: 자본적정성 평가 -->
+<P>35.2 자본적정성 평가에 관한 사항</P>
+<TABLE>
+  <!-- 적기시정조치 기준표 (비율 범위·조치명만 나열) -->
+  <TR><TD>경영개선권고</TD><TD>50% 이상 100% 미만</TD></TR>
+  <TR><TD>경영개선요구</TD><TD>0% 이상 50% 미만</TD></TR>
+  <TR><TD>경영개선명령</TD><TD>0% 미만</TD></TR>
+</TABLE>
+<P>연결실체는 감독기관에서 규정한 K-ICS 지급여력비율을 준수하고 있습니다.</P>
+```
+
+삼성생명은 실제 지급여력 금액·비율을 테이블로 공시하지 않고 "준수하고 있습니다" 한 줄로 대체.  
+**파싱할 수치 자체가 보고서에 없음.**
+
+---
+
+### 사례 3 — K-ICS 잠정치 "산출중" 처리: 한화생명 ⚠️ vs 삼성생명 ❌ (구조 차이)
+
+한화생명은 같은 표 안에서 당기 칸을 "산출중"으로 채우는 방식이라 테이블 자체는 있지만 수치가 없음:
+
+**한화생명** `doc_annual_2025.xml`:
+
+```xml
+<TR>
+  <TD>지급여력(A)</TD>
+  <TD ALIGN="CENTER">산출중</TD>       <!-- 2025년: 텍스트 "산출중" -->
+  <TD ALIGN="RIGHT">21,331,699</TD>    <!-- 2024년: 숫자 있음 -->
+  <TD ALIGN="RIGHT">20,979,268</TD>    <!-- 2023년: 숫자 있음 -->
+</TR>
+<TR>
+  <TD>지급여력비율(A/B)</TD>
+  <TD ALIGN="CENTER">산출중</TD>       <!-- 당기 잠정치 미확정 -->
+  <TD ALIGN="RIGHT">163.7</TD>
+  <TD ALIGN="RIGHT">183.8</TD>
+</TR>
+```
+
+삼성생명과의 차이: 한화생명은 테이블은 있고 셀에 "산출중" 문자만 들어있어 수치만 없는 구조.  
+삼성생명은 아예 비율 테이블 자체가 없음. → 둘 다 MISS지만 **구조적으로 다른 이유**.
+
+---
+
+### 사례 4 — CSM 기간별 (Col83~87): 교보생명 ✅ vs 신한라이프 ❌
+
+**교보생명** `doc_annual_2025.xml` — "보험계약마진의 예상 당기손익 인식기간" 테이블이 1년 단위로 세분화:
+
+```xml
+<P>17-8) 보험계약마진의 예상 당기손익 인식기간은 다음과 같습니다.</P>
+<TABLE>
+  <TR>
+    <TH>1년 이하</TH><TH>1년~2년</TH><TH>2년~3년</TH>
+    <TH>3년~4년</TH><TH>4년~5년</TH><TH>5년~10년</TH>
+    <TH>10년 초과</TH><TH>합계</TH>
+  </TR>
+  <TR>
+    <TD ALIGN="RIGHT">572,633</TD>   <!-- 1년 이하 → Col83 -->
+    <TD ALIGN="RIGHT">501,445</TD>   <!-- 1~2년  → Col84 내부 집계 -->
+    ...
+    <TD ALIGN="RIGHT">6,538,630</TD> <!-- 합계  → Col75와 일치 확인 -->
+  </TR>
+</TABLE>
+```
+
+→ 헤더 "1년 이하", "5년~10년", "10년 초과" 기준으로 Col83~87에 매핑 성공.
+
+**신한라이프** `doc_annual_2025.xml` — 동일 주석이 **없음**:
+
+```xml
+<!-- "예상 당기손익 인식기간" 또는 "보험계약마진이 미래에 인식될 것으로 기대되는 금액"
+     해당 테이블 자체가 doc_annual_2025.xml에 존재하지 않음 -->
+
+<!-- 신한라이프 1분기보고서(doc_1q_신한라이프_2026.xml)에만 일부 존재하나
+     연간 기준 구간(1년 이하·1~5년·5~10년·10년 초과) 으로만 묶어 공시 -->
+```
+
+신한라이프는 사업보고서에 해당 테이블을 아예 공시하지 않음.  
+공시 의무 항목이 아니기 때문에 작성 여부·구간 세분화 방식 모두 회사 재량 → 자동화 불가.
+
+---
+
 ## 파일 구조
 
 ```
