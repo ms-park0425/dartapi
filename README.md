@@ -47,6 +47,136 @@ python parse_annual.py --period 2412    # 2024년 12월 사업보고서
 
 ---
 
+## 왜 회사마다 결과가 다른가
+
+자동화가 안 되거나 회사마다 결과가 다른 이유는 크게 두 가지입니다.
+
+---
+
+### 이유 1 — XBRL 안에서 같은 값을 저장하는 구조가 회사마다 다르다
+
+XBRL에서 숫자 하나는 항상 **"이 숫자가 어떤 조건의 값인지"를 설명하는 조건(dimension)** 이 함께 저장됩니다.  
+이 조건이 2개면 2-dim, 3개면 3-dim입니다.  
+IFRS17은 어떤 조건을 얼마나 붙일지 회사 재량이라, **같은 항목인데 회사마다 구조가 다릅니다.**
+
+#### DATA 시트 Col75 (CSM 잔액) — 같은 숫자를 찾는 방법이 회사마다 다르다
+
+DATA 시트에는 숫자 하나만 있지만, XBRL 안에서는 회사마다 다른 조건 조합으로 저장되어 있습니다.
+
+**삼성생명 — 2-dim: 조건 2개, CSM 값이 그대로 하나로 저장**
+
+```
+조건① 별도재무제표 기준
+조건② 보험계약 구분 = CSM
+
+→ 해당 조건의 값 = 13,217,874 (백만원)
+```
+
+**교보생명 — 3-dim: 조건 3개, "발행계약 전체" 아래에 CSM이 들어있음**
+
+```
+조건① 별도재무제표 기준
+조건② 보험계약 구분 = 발행계약 전체 (IssuedMember)
+조건③ 구성요소 = CSM
+
+→ 해당 조건의 값 = 6,510,962 (백만원)
+```
+
+**현대해상 — 5~6-dim: 보험종류별로 쪼개져 저장 → 합산 필요**
+
+```
+조건① 별도재무제표 기준
+조건② 발행계약 전체
+조건③ PAA 미적용 계약 (일반측정모형)
+조건④ 장기보험                      → 장기보험 CSM = A
+조건⑤ 구성요소 = CSM
+                                    → 일반보험 CSM = B  (조건④만 다른 별도 context)
+                                    → A + B = 8,977,842 (백만원)
+```
+
+현대해상처럼 보험종류별로 나뉜 회사는 스크립트가 해당 context를 모두 찾아 더해야 최종 값이 나옵니다.  
+스크립트는 2-dim → 3-dim → 5~6-dim 패턴을 순서대로 시도합니다.
+
+#### OCI 세부잔액 (Col25~30) — 3번째 axis 이름이 회사마다 달라서 MISS 발생
+
+| 회사 | 구조 | 방식 |
+|------|------|------|
+| 삼성생명 | **2-dim** | `ComponentsOfEquityAxis`에 FVOCI 잔액 멤버를 **직접** 넣음 |
+| 미래에셋·교보 등 | **3-dim** | `ComponentsOfEquityAxis = OCI누계액전체` 고정 + **회사 자체 정의 3번째 axis**로 세부 구분 |
+
+미래에셋 등은 3번째 axis 이름에 회사 고유 코드(`entity00112332:ChangesInAccumulatedOCI...`)가 들어가 회사마다 달라집니다.  
+표준 패턴으로 일괄 매핑이 안 되기 때문에 일부 회사 Col25~30이 MISS가 됩니다.
+
+#### CSM 변동표 (Col76~80) — dim 수에 따라 탐색 방식이 달라짐
+
+| 회사 | Dim 수 | 특이사항 |
+|------|--------|---------|
+| 삼성생명 | **3-dim** | `Separate` + `IssuedMember` + `TypesOfContractsAxis`(건강/생명 등) |
+| 미래에셋 | **4+5-dim 병행** | 신계약·상각은 4-dim, 전환방식(MRA/FVA)별 조정은 5-dim에 따로 있음 |
+| 삼성화재 | **6-dim** | 위에 `RemainingCoverageAxis` + `InputsToMethodsAxis(LossComponent)` 추가 |
+
+미래에셋은 같은 보고서 안에서 태그마다 4-dim과 5-dim에 나뉘어 저장되어 있어 두 패턴을 따로 탐색한 뒤 합산합니다.
+
+---
+
+### 이유 2 — 보고서 원문 XML에서 테이블 자체가 없거나 위치·형태가 다르다
+
+XBRL이 아닌 보고서 원문(document.xml)에서 파싱하는 항목은 회사가 해당 테이블을 아예 공시하지 않거나  
+다른 형태로 작성하면 추출이 불가능합니다.
+
+#### 운용자산 (Col22·23): 교보생명 ✅ vs 삼성화재 ❌
+
+**교보생명** — "II. 사업의 내용 > 영업의 현황"에 운용자산 테이블 존재:
+
+```xml
+<TD ROWSPAN="10">운용자산</TD>
+<TD>현ㆍ예금</TD>  <TD ALIGN="RIGHT">3,358,380</TD>
+...
+<TD>운용자산(B)</TD>  <TD ALIGN="RIGHT">107,254,263</TD>
+```
+
+**삼성화재** — 해당 테이블 자체가 없음:
+
+```xml
+<!-- "운용자산" 검색 결과: 퇴직연금 관련 텍스트 2건뿐 -->
+<TD>퇴직연금운용자산</TD>
+```
+
+손해보험사는 보험업 감독규정상 생명보험사에게 요구하는 자산종류별 운용현황표 공시의무가 없어 테이블 자체가 없습니다.
+
+#### K-ICS 지급여력비율 (Col92~94): 신한라이프 ✅ vs 삼성생명 ❌
+
+**신한라이프** — "5. 재무건전성" 섹션에 수치 테이블 존재:
+
+```xml
+<TR><TD>지급여력(A)</TD>      <TD ALIGN="RIGHT">98,765</TD></TR>
+<TR><TD>지급여력기준(B)</TD>   <TD ALIGN="RIGHT">47,934</TD></TR>
+<TR><TD>지급여력비율(A/B)</TD> <TD ALIGN="RIGHT">206.0</TD></TR>
+```
+
+**삼성생명** — 수치 테이블 없이 텍스트만 존재:
+
+```xml
+<P>연결실체는 감독기관에서 규정한 K-ICS 지급여력비율을 준수하고 있습니다.</P>
+```
+
+삼성생명은 실제 수치를 테이블로 공시하지 않아 파싱할 값이 없습니다.
+
+#### CSM 기간별 (Col83~87): 교보생명 ✅ vs 신한라이프 ❌
+
+**교보생명** — 1년 단위로 세분화된 테이블 존재:
+
+```xml
+<TH>1년 이하</TH><TH>1년~2년</TH>...<TH>10년 초과</TH><TH>합계</TH>
+<TD ALIGN="RIGHT">572,633</TD><TD ALIGN="RIGHT">501,445</TD>...
+<TD ALIGN="RIGHT">6,538,630</TD>
+```
+
+**신한라이프** — 사업보고서에 해당 테이블 없음.  
+공시 의무 항목이 아니라 작성 여부 자체가 회사 재량이라 자동화 불가.
+
+---
+
 ## 컬럼별 자동화 현황
 
 > **기준: 2512 (2025년 12월 사업보고서), 12개사**  
@@ -256,6 +386,100 @@ python parse_annual.py --period 2412    # 2024년 12월 사업보고서
 
 ---
 
+## 회사마다 XBRL 구조가 다른 이유
+
+XBRL에서 숫자 하나는 항상 **"이 숫자가 어떤 조건의 값인지"를 설명하는 조건(dimension)** 이 함께 저장됩니다.  
+이 조건이 2개면 2-dim, 3개면 3-dim입니다.  
+IFRS17은 어떤 조건을 얼마나 붙일지 회사 재량이라, **같은 항목인데 회사마다 구조가 다릅니다.**
+
+### DATA 시트 Col75 (CSM 잔액) — 회사마다 찾는 방법이 다르다
+
+DATA 시트에는 숫자 하나만 있지만, XBRL 안에서는 회사마다 다른 조건 조합으로 저장되어 있습니다.  
+**삼성생명 13,217,874** (단위: 백만원)을 예로 들면:
+
+**삼성생명 — 2-dim: 조건 2개, CSM 값이 그대로 하나로 저장**
+
+```
+조건① 별도재무제표 기준
+조건② 보험계약 구분 = CSM
+
+→ 해당 조건의 InsuranceContractsLiabilityAsset 값 = 13,217,874
+```
+
+**교보생명 — 3-dim: 조건 3개, "발행계약 전체" 아래에 CSM이 들어있음**
+
+```
+조건① 별도재무제표 기준
+조건② 보험계약 구분 = 발행계약 전체 (IssuedMember)
+조건③ 구성요소 = CSM
+
+→ 해당 조건의 InsuranceContractsThatAreLiabilities 값 = 6,510,962
+```
+
+**현대해상 — 5~6-dim: 보험종류별로 쪼개져 저장 → 합산 필요**
+
+```
+조건① 별도재무제표 기준
+조건② 발행계약 전체
+조건③ PAA 미적용 계약 (일반측정모형)
+조건④ 장기보험 (LongtermInsuranceMember)
+조건⑤ 구성요소 = CSM
+(조건⑥ 배당/비배당 분류가 추가되기도 함)
+
+→ 장기보험 CSM = A
+→ 일반보험 CSM = B    ← 별도 6-dim context
+→ A + B = 8,977,842
+```
+
+현대해상처럼 보험종류별로 쪼개서 저장한 회사는 스크립트가 해당하는 모든 context를 찾아 더해야 최종 값이 나옵니다.  
+스크립트는 2-dim 패턴(삼성생명)과 3~6-dim 패턴(나머지)을 순서대로 시도합니다.
+
+---
+
+### 예시 2 — OCI 세부잔액 (Col25~30): 2-dim vs 3-dim
+
+같은 "FVOCI 평가손익 잔액"인데 axis 설계 방식이 다릅니다.
+
+| 회사 | Dim 수 | Axis 구성 |
+|------|--------|-----------|
+| 삼성생명 | **2-dim** | `Separate` + `ComponentsOfEquityAxis = ReserveOfGainsAndLossesOnFVOCI...Member` |
+| 미래에셋·교보·KB손보 등 | **3-dim** | `Separate` + `ComponentsOfEquityAxis = dart:OtherComprehensiveIncomeLossAccumulatedAmountMember` + entity-specific `ChangesInAccumulatedOCIAxis = FVOCI평가손익Member` |
+
+삼성생명은 `ComponentsOfEquityAxis`에 FVOCI 잔액 Reserve 멤버를 직접 넣어 2-dim으로 끝납니다.  
+미래에셋 등은 `ComponentsOfEquityAxis`를 항상 "OCI누계액 전체" 버킷으로 고정하고,  
+세부 항목 구분은 **회사 자체 정의 3번째 axis**로 합니다.
+
+→ 3번째 axis 이름에 회사 고유 코드(`entity00112332:...`)가 들어가 회사마다 달라서 패턴 매칭이 어렵습니다.  
+이게 Col25~30에서 일부 회사 MISS가 나는 핵심 이유입니다.
+
+---
+
+### 예시 3 — CSM 변동표 (Col76~80): 3-dim vs 4+5-dim vs 6-dim
+
+| 회사 | Dim 수 | 특이사항 |
+|------|--------|---------|
+| 삼성생명 | **3-dim** | `Separate` + `InsuranceContractsIssuedMember` + `TypesOfContractsAxis`(건강/생명 등) |
+| 미래에셋 | **4-dim + 5-dim 병행** | 신계약·상각은 4-dim, 전환방식(MRA/FVA)별 조정은 5-dim에 따로 있음 |
+| 삼성화재 | **6-dim** | 위에 `RemainingCoverageAxis` + `InputsToMethodsAxis(LossComponent)` 추가 |
+
+미래에셋은 같은 보고서 안에서 태그마다 4-dim context와 5-dim context에 나뉘어 저장되어 있어,  
+스크립트가 두 패턴을 따로 탐색한 뒤 합산합니다.
+
+---
+
+## 주요 한계 및 수동입력 필요 항목
+
+| 항목 | 이유 |
+|------|------|
+| Col107~117 (예실차·위험보험료) | XBRL 미제공, 원문 XML 집계 불가 |
+| Col83~87 (CSM 기간별) 일부 회사 | 사업보고서 원문 XML에 테이블 없음 |
+| Col92~97 (K-ICS) 일부 회사 | 사업보고서 제출 시 산출중 상태 |
+| Col22~23 (운용자산) 일부 회사 | 원문 XML에 테이블 없음 |
+| Col25~30 (OCI 세부잔액) 일부 회사 | XBRL에서 회사마다 항목 분류 방식이 달라 자동 매핑 불가 |
+| 2212 (2022년말) | IFRS17 전환 이전 데이터로 DART에 XBRL 미제공 — 자동화 불가, 수동 입력 필요 |
+
+---
+
 ## 전체 정확도 요약
 
 정답 데이터(`202512_동업사 공시비교_DATA_작업_260320.xlsx`)와 비교한 결과입니다.  
@@ -278,90 +502,6 @@ python parse_annual.py --period 2412    # 2024년 12월 사업보고서
 - **2512 (76%)**: 사업보고서 전용 항목까지 포함해 가장 높은 정확도. 주요 MISS는 예실차 세부(XBRL 미제공)·일부 CSM기간별·OCI 세부잔액.
 
 > **Excel 주황색 셀**: 정답과 0.1% 이상 차이나는 셀 (FAIL). 빈 셀은 미추출(MISS).
-
----
-
-## 주요 한계 및 수동입력 필요 항목
-
-| 항목 | 이유 |
-|------|------|
-| Col107~117 (예실차·위험보험료) | XBRL 미제공, 원문 XML 집계 불가 |
-| Col83~87 (CSM 기간별) 일부 회사 | 사업보고서 원문 XML에 테이블 없음 |
-| Col92~97 (K-ICS) 일부 회사 | 사업보고서 제출 시 산출중 상태 |
-| Col22~23 (운용자산) 일부 회사 | 원문 XML에 테이블 없음 |
-| Col25~30 (OCI 세부잔액) 일부 회사 | XBRL에서 회사마다 항목 분류 방식이 달라 자동 매핑 불가 |
-| 2212 (2022년말) | IFRS17 전환 이전 데이터로 DART에 XBRL 미제공 — 자동화 불가, 수동 입력 필요 |
-
----
-
-## 회사마다 XBRL 구조가 다른 이유
-
-XBRL에서 숫자 하나는 항상 **"이 숫자가 어떤 조건의 값인지"를 설명하는 조건(dimension)** 이 함께 저장됩니다.  
-이 조건이 2개면 2-dim, 3개면 3-dim입니다.  
-IFRS17은 어떤 조건을 얼마나 붙일지 회사 재량이라, **같은 항목인데 회사마다 구조가 다릅니다.**
-
-### DATA 시트 Col75 (CSM 잔액) 를 가져오는 방법
-
-> DATA 시트에는 숫자 하나만 있지만, XBRL 안에서는 회사마다 다른 조건 조합으로 저장되어 있습니다.
-
-| 회사 | 조건 개수 | XBRL에서 이 숫자를 찾으려면 |
-|------|----------|---------------------------|
-| 삼성생명 | **2개** | ① 별도재무제표 기준 &nbsp;② 보험계약 구분 = **CSM** |
-| 교보·신한라이프·KB생명 | **3개** | ① 별도재무제표 기준 &nbsp;② 보험계약 구분 = 발행계약 전체 &nbsp;③ 구성요소 = **CSM** |
-| 현대해상·DB손보·한화 | **5~6개** | ① 별도기준 &nbsp;② 발행계약 전체 &nbsp;③ PAA 미적용 계약 &nbsp;④ 장기보험 &nbsp;⑤ 구성요소 = **CSM** (⑥ 배당/비배당 분류 추가되기도 함) |
-
-삼성생명은 "CSM이다"라는 조건 하나로 바로 찾을 수 있고,  
-교보 등은 "발행계약 전체 중 CSM 구성요소"라는 2단계 구조,  
-현대해상 등은 보험종류·PAA 여부·배당 분류까지 붙어 있어 그 모든 조건을 조합해서 합산해야 같은 숫자가 나옵니다.
-
-스크립트는 이 패턴들을 순서대로 시도해서 값을 찾습니다.
-
-### 예시 1 — BEL/RA/CSM (Col73~75): 2-dim vs 3-dim vs 6-dim
-
-같은 "BEL 잔액" 값인데 회사마다 context에 달린 dimension 개수가 다릅니다.
-
-| 회사 | Dim 수 | Axis 구성 |
-|------|--------|-----------|
-| 삼성생명 | **2-dim** | `Separate` + `DisaggregationAxis = EstimatesOfPresentValueOfFutureCashFlowsMember` |
-| 교보·신한라이프·KB생명·메리츠 | **3-dim** | `Separate` + `DisaggregationAxis = InsuranceContractsIssuedMember` + `ComponentsAxis = EstimatesOfPresentValue...` |
-| 현대해상·DB손보·한화 | **5~6-dim** | 위 3-dim에 `InsuranceContractsAxis`(PAA 여부) + `TypesOfContractsAxis`(장기/일반) + entity-specific 배당분류 추가 |
-
-삼성생명은 `DisaggregationAxis` 하나에 BEL/RA/CSM을 직접 넣고,  
-교보 등은 `DisaggregationAxis = IssuedMember`(발행 계약 전체) + 별도 `ComponentsAxis`로 구분,  
-현대해상 등은 여기에 보험종류·PAA 해당 여부까지 axis를 추가합니다.
-
-→ 스크립트는 2-dim 패턴(패턴A)과 3~6-dim 패턴(패턴B)을 순서대로 시도합니다.
-
----
-
-### 예시 2 — OCI 세부잔액 (Col25~30): 2-dim vs 3-dim
-
-같은 "FVOCI 평가손익 잔액"인데 axis 설계 방식이 다릅니다.
-
-| 회사 | Dim 수 | Axis 구성 |
-|------|--------|-----------|
-| 삼성생명 | **2-dim** | `Separate` + `ComponentsOfEquityAxis = ReserveOfGainsAndLossesOnFVOCI...Member` |
-| 미래에셋·교보·KB손보 등 | **3-dim** | `Separate` + `ComponentsOfEquityAxis = dart:OtherComprehensiveIncomeLossAccumulatedAmountMember` + entity-specific `ChangesInAccumulatedOCIAxis = FVOCI평가손익Member` |
-
-삼성생명은 `ComponentsOfEquityAxis`에 각 OCI 세부 Reserve 멤버를 직접 넣어서 2-dim으로 끝냅니다.  
-미래에셋 등은 `ComponentsOfEquityAxis`에 항상 "OCI누계액 전체" 버킷을 걸고,  
-**세부 항목 구분은 회사 자체 정의 3번째 axis**로 합니다.
-
-→ 3번째 axis가 entity-specific(회사코드 포함)이라 회사마다 axis명이 달라 패턴 매칭이 어렵습니다.  
-이게 Col25~30에서 일부 회사 MISS가 나는 핵심 이유입니다.
-
----
-
-### 예시 3 — CSM 변동표 (Col76~80): 3-dim vs 4-dim vs 6-dim
-
-| 회사 | Dim 수 | 특이사항 |
-|------|--------|---------|
-| 삼성생명 | **3-dim** | `Separate` + `InsuranceContractsIssuedMember` + `TypesOfContractsAxis`(건강/생명 등) |
-| 미래에셋 | **4-dim + 5-dim 병행** | 신계약·상각은 4-dim, 전환방식(MRA/FVA)별 조정은 5-dim에 따로 있음 |
-| 삼성화재 | **6-dim** | 위에 `RemainingCoverageAxis` + `InputsToMethodsAxis(LossComponent)` 추가 |
-
-미래에셋은 같은 보고서 안에서 태그마다 4-dim context에 있는 것과 5-dim context에만 있는 것이 섞여 있어,  
-스크립트가 두 패턴을 따로 탐색해서 합산합니다.
 
 ---
 
