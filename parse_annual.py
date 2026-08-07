@@ -2961,22 +2961,23 @@ def extract_company_data(corp_name, year="2025", report_type="사업보고서", 
     if 18 in result:
         result[71] = result[18]
 
-    # CSM 변동 항목
+    # CSM 변동 항목 (XBRL 기반 — 분기/반기/사업보고서 모두 시도)
+    csm_mov = parse_csm_movement(xbrl_path, year, ref_date=ref_date, start_date=start_date)
+    if csm_mov["csm_amortization"]:
+        result[77] = abs(csm_mov["csm_amortization"]) / 1e6
+    if csm_mov["csm_adjustment"]:
+        result[78] = csm_mov["csm_adjustment"] / 1e6
+    if csm_mov["csm_finance"]:
+        result[79] = csm_mov["csm_finance"] / 1e6
+    if 76 not in result and csm_mov.get("new_csm"):
+        result[76] = abs(csm_mov["new_csm"]) / 1e6
+
+    prior_csm = parse_prior_csm(xbrl_path, year)
+    if prior_csm:
+        result[80] = prior_csm / 1e6
+
+    # doc.xml CSM 변동 fallback — 사업보고서만 (분기 doc.xml은 별도 작업)
     if is_annual:
-        csm_mov = parse_csm_movement(xbrl_path, year, ref_date=ref_date, start_date=start_date)
-        if csm_mov["csm_amortization"]:
-            result[77] = abs(csm_mov["csm_amortization"]) / 1e6
-        if csm_mov["csm_adjustment"]:
-            result[78] = csm_mov["csm_adjustment"] / 1e6
-        if csm_mov["csm_finance"]:
-            result[79] = csm_mov["csm_finance"] / 1e6
-        if 76 not in result and csm_mov.get("new_csm"):
-            result[76] = abs(csm_mov["new_csm"]) / 1e6
-
-        prior_csm = parse_prior_csm(xbrl_path, year)
-        if prior_csm:
-            result[80] = prior_csm / 1e6
-
         if 77 not in result and 75 in result and corp_name in DOC_CSM_MOVEMENT_COMPANIES:
             doc_csm = parse_csm_movement_from_doc(corp_name, result[75], year)
             for col, val in doc_csm.items():
@@ -3001,8 +3002,8 @@ def extract_company_data(corp_name, year="2025", report_type="사업보고서", 
             elif col in (25, 26, 27, 28, 29, 30) and result[col] != 0:
                 pass
 
-    # 계리적 가정 변경 민감도 분석 (Col146~158) — 사업보고서만
-    actuarial = parse_actuarial_sensitivity(xbrl_path, year, ref_date=ref_date, start_date=start_date) if is_annual else {}
+    # 계리적 가정 변경 민감도 분석 (Col146~158) — XBRL 기반, 분기/반기/사업보고서 모두 시도
+    actuarial = parse_actuarial_sensitivity(xbrl_path, year, ref_date=ref_date, start_date=start_date)
     for (col, comp), v in actuarial.items():
         result[col] = v / 1e6
 
