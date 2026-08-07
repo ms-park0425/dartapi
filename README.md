@@ -55,48 +55,70 @@ python parse_annual.py --period 2412    # 2024년 12월 사업보고서
 
 ### 이유 1 — XBRL 안에서 같은 값을 저장하는 구조가 회사마다 다르다
 
-XBRL에서 숫자 하나는 항상 **"이 숫자가 어떤 조건의 값인지"를 설명하는 조건(dimension)** 이 함께 저장됩니다.  
-이 조건이 2개면 2-dim, 3개면 3-dim입니다.  
-IFRS17은 어떤 조건을 얼마나 붙일지 회사 재량이라, **같은 항목인데 회사마다 구조가 다릅니다.**
+XBRL은 숫자 하나를 저장할 때 **"이 숫자가 어떤 조건의 값인가"를 함께 태깅**합니다.  
+엑셀 피벗테이블에서 필터를 걸어 특정 셀 값을 뽑는 것과 같고, 그 필터 개수를 **dim**이라고 부릅니다.
 
-#### DATA 시트 Col75 (CSM 잔액) — 같은 숫자를 찾는 방법이 회사마다 다르다
+IFRS17은 어떤 필터를 얼마나 걸지 회사 재량이라, **같은 항목인데 회사마다 필터 구조가 다릅니다.**
 
-DATA 시트에는 숫자 하나만 있지만, XBRL 안에서는 회사마다 다른 조건 조합으로 저장되어 있습니다.
+#### DATA 시트 Col75 (CSM 잔액) — 같은 숫자를 찾는 필터가 회사마다 다르다
 
-**삼성생명 — 2-dim: 조건 2개, CSM 값이 그대로 하나로 저장**
-
-```
-조건① 별도재무제표 기준
-조건② 보험계약 구분 = CSM
-
-→ 해당 조건의 값 = 13,217,874 (백만원)
-```
-
-**교보생명 — 3-dim: 조건 3개, "발행계약 전체" 아래에 CSM이 들어있음**
+**삼성생명 — 필터 2개 (2-dim)**
 
 ```
-조건① 별도재무제표 기준
-조건② 보험계약 구분 = 발행계약 전체 (IssuedMember)
-조건③ 구성요소 = CSM
-
-→ 해당 조건의 값 = 6,510,962 (백만원)
+필터① 재무제표 종류  = 별도
+필터② 보험계약 구분  = CSM
 ```
 
-**현대해상 — 5~6-dim: 보험종류별로 쪼개져 저장 → 합산 필요**
+```xml
+<xbrldi:explicitMember dimension="ConsolidatedAndSeparateFinancialStatementsAxis">SeparateMember</xbrldi:explicitMember>
+<xbrldi:explicitMember dimension="DisaggregationOfInsuranceContractsAxis">ContractualServiceMarginMember</xbrldi:explicitMember>
 
-```
-조건① 별도재무제표 기준
-조건② 발행계약 전체
-조건③ PAA 미적용 계약 (일반측정모형)
-조건④ 장기보험 + 구성요소 = CSM  →  8,868,911,078,887 원  (LRC 비배당 잔여보장)
-조건④ 장기보험 + 배당형           →    108,930,990,435 원  (배당 포트폴리오)
-조건④ 일반보험 + 구성요소 = CSM  →              0 원
-조건④ 자동차보험 + 구성요소 = CSM →              0 원
-                              ─────────────────────────
-                              합계  8,977,842,069,322 원  = 8,977,842 (백만원)  ✅
+→ InsuranceContractsLiabilityAsset = 13,217,874 (백만원)
 ```
 
-현대해상처럼 보험종류별로 나뉜 회사는 스크립트가 해당 context를 모두 찾아 더해야 최종 값이 나옵니다.  
+**교보생명 — 필터 3개 (3-dim)**
+
+```
+필터① 재무제표 종류  = 별도
+필터② 보험계약 구분  = 발행계약 전체
+필터③ 구성요소       = CSM             ← 필터 하나 더 필요
+```
+
+```xml
+<xbrldi:explicitMember dimension="ConsolidatedAndSeparateFinancialStatementsAxis">SeparateMember</xbrldi:explicitMember>
+<xbrldi:explicitMember dimension="DisaggregationOfInsuranceContractsAxis">InsuranceContractsIssuedMember</xbrldi:explicitMember>
+<xbrldi:explicitMember dimension="InsuranceContractsByComponentsAxis">ContractualServiceMarginMember</xbrldi:explicitMember>
+
+→ InsuranceContractsThatAreLiabilities = 6,510,962 (백만원)
+```
+
+**현대해상 — 필터 6개 (6-dim), 보험종류별로 쪼개져 있어 합산 필요**
+
+```
+필터① 재무제표 종류  = 별도
+필터② 보험계약 구분  = 발행계약 전체
+필터③ 회계모형       = PAA 미적용
+필터④ 구성요소       = CSM
+필터⑤ 잔여보장       = LRC
+필터⑥ 보험종류       = 장기보험 (비배당)  →  8,868,911,078,887 원
+       보험종류       = 장기보험 (배당)    →    108,930,990,435 원
+       보험종류       = 일반보험           →                  0 원
+       보험종류       = 자동차보험         →                  0 원
+                                          ───────────────────────
+                                합계       8,977,842,069,322 원 = 8,977,842 (백만원) ✅
+```
+
+```xml
+<!-- 필터⑥이 보험종류마다 달라지는 6개짜리 context가 여러 개 존재 -->
+<xbrldi:explicitMember dimension="ConsolidatedAndSeparateFinancialStatementsAxis">SeparateMember</xbrldi:explicitMember>
+<xbrldi:explicitMember dimension="DisaggregationOfInsuranceContractsAxis">InsuranceContractsIssuedMember</xbrldi:explicitMember>
+<xbrldi:explicitMember dimension="InsuranceContractsAxis">InsuranceContractsOtherThanPremiumAllocationApproachMember</xbrldi:explicitMember>
+<xbrldi:explicitMember dimension="InsuranceContractsByComponentsAxis">ContractualServiceMarginMember</xbrldi:explicitMember>
+<xbrldi:explicitMember dimension="InsuranceContractsByRemainingCoverageAndIncurredClaimsAxis">LiabilitiesForRemainingCoverageMember</xbrldi:explicitMember>
+<xbrldi:explicitMember dimension="TypesOfContractsAxis">LongtermInsuranceMember</xbrldi:explicitMember>  ← 보험종류마다 다름
+```
+
+현대해상처럼 보험종류별로 쪼갠 회사는 스크립트가 해당하는 모든 context를 찾아 더해야 최종 값이 나옵니다.  
 스크립트는 2-dim → 3-dim → 5~6-dim 패턴을 순서대로 시도합니다.
 
 #### OCI 세부잔액 (Col25~30) — 3번째 axis 이름이 회사마다 달라서 MISS 발생
