@@ -3081,60 +3081,7 @@ def extract_company_data(corp_name, year="2025", report_type="사업보고서", 
                     break
 
     # 계산값 (다른 컬럼 값들의 조합)
-    # Col72: 22년말(ifrs4) - 대부분 0이고 기대값도 0 (현대해상 0.003도 tol 범위 내)
-    if 72 not in result:
-        result[72] = 0.0
-
-    # Col31: OCI 체크 = Col24 - (Col25+Col26+Col27+Col28+Col29+Col30)
-    # 세부항목이 모두 있을 때만 계산 (일부 누락 시 0 처리)
-    oci_parts_cols = [25, 26, 27, 28, 29, 30]
-    if 24 in result:
-        present = [c for c in oci_parts_cols if c in result]
-        if len(present) == 6:
-            result[31] = result[24] - sum(result[c] for c in oci_parts_cols)
-        elif len(present) == 0:
-            result[31] = 0.0  # 세부항목 없으면 check=0
-
-    # Col45: 영업손익 체크 = Col41+Col42-Col43
-    if all(c in result for c in [41, 42, 43]):
-        result[45] = result[41] + result[42] - result[43]
-
-    # Col46: 투자손익 체크 = Col36+Col37+Col38-Col39+Col40-Col35
-    if all(c in result for c in [35, 36, 38, 39, 40]):
-        result[46] = (result.get(36,0) + result.get(37,0) + result.get(38,0)
-                      - result.get(39,0) + result.get(40,0) - result.get(35,0))
-
-    # Col47: 보험투자손익 체크 = Col32+Col35-Col41
-    if all(c in result for c in [32, 35, 41]):
-        result[47] = result[32] + result[35] - result[41]
-
-    # Col64: OCI 체크 = Col63 - Col55 - SUM(Col56~62)
-    # Col57(대손충당금)은 없으면 0으로 처리, 나머지 주요항목은 있어야 계산
-    if 63 in result and 55 in result and all(c in result for c in [56, 58, 59, 60, 61]):
-        oci_detail = [result.get(c, 0) for c in range(56, 63)]
-        result[64] = result[63] - result[55] - sum(oci_detail)
-
-    # Col89: CSM 합계 체크 = Col88-SUM(Col83~87), 반올림 오차 보정
-    # Col83~87이 모두 있을 때만 계산 (없으면 빈 값이 0으로 가정되어 틀린 결과)
-    csm_detail = [result.get(c, 0) for c in range(83, 88)]
-    if 88 in result and all(c in result for c in range(83, 88)):
-        diff = result[88] - sum(csm_detail)
-        result[89] = 0.0 if abs(diff) <= 2 else diff
-
-    # Col82: CSM 증감 = Col80+Col76-Col77+Col78+Col79-Col75
-    if all(c in result for c in [75, 76, 77, 78, 79, 80]):
-        val82 = result[80] + result[76] - result[77] + result[78] + result[79] - result[75]
-        result[82] = val82  # 0이어도 저장 (체크값)
-
-    # Col90: CHECK (CSM기간별 합계 체크) - 대부분 0
-    # Col83~87 데이터 없으면 0으로 설정 (check값=0은 합당)
-    if 88 in result and 90 not in result:
-        result[90] = 0.0
-
-    # Col159: CHECK (가정변경 민감도 체크) - 대부분 0
-    if any(c in result for c in range(146, 159)):
-        if 159 not in result:
-            result[159] = 0.0
+    # 체크열(Col31/45/46/47/64/72/82/89/90/159)은 엑셀에서 수식으로 계산 — 스크립트에서 채우지 않음
 
     return result
 
@@ -3225,7 +3172,7 @@ def main(year=None, period_code=None):
         writer = csv.writer(f)
         writer.writerow(["key"] + [f"Col{c}" for c in all_cols])
         for key, data in all_results.items():
-            row = [key] + [data.get(c, "") for c in all_cols]
+            row = [key] + [round(data[c], 6) if isinstance(data.get(c), float) else data.get(c, "") for c in all_cols]
             writer.writerow(row)
 
     print(f"\n저장: {output_path}")
@@ -3369,6 +3316,9 @@ def main(year=None, period_code=None):
                             filled += 1
                             continue
 
+                    # 부동소수점 반올림 (소수점 6자리)
+                    if isinstance(val, float):
+                        val = round(val, 6)
                     cell.value = val
                     filled += 1
 

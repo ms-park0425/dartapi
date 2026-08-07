@@ -1,15 +1,20 @@
 """
-data_sheet_2512.csv vs DATA 시트 정답 비교 검증 스크립트
+data_sheet_{period}.csv vs DATA 시트 정답 비교 검증 스크립트
 """
 import csv
 import openpyxl
 import sys
+import argparse
 
 sys.stdout.reconfigure(encoding="utf-8")
 
-ANSWER_FILE = "202512_동업사 공시비교_DATA_작업_260320.xlsx"
-OUTPUT_CSV = "data/data_sheet_2512.csv"
+parser = argparse.ArgumentParser()
+parser.add_argument("--period", default="2512")
+args, _ = parser.parse_known_args()
 
+PERIOD = args.period
+ANSWER_FILE = "202512_동업사 공시비교_DATA_작업_260320.xlsx"
+OUTPUT_CSV = f"data/data_sheet_{PERIOD}.csv"
 
 
 def load_answer():
@@ -27,7 +32,7 @@ def load_answer():
     answer = {}
     for r in range(5, ws.max_row + 1):
         key = ws.cell(row=r, column=1).value
-        if not key or "2512" not in str(key):
+        if not key or str(PERIOD) not in str(key):
             continue
         key = str(key).strip()
         row_data = {}
@@ -73,8 +78,11 @@ def compare(answer, output, tol=0.01):
             continue
         ans = answer[csv_key]
 
+        CHECK_COLS = {31, 45, 46, 47, 64, 72, 82, 89, 90, 159}
         for col_num, expected in ans.items():
             if col_num in (1, 2, 3):
+                continue
+            if col_num in CHECK_COLS:
                 continue
 
             actual = out.get(col_num)
