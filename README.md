@@ -142,10 +142,35 @@ for ctx in root.findall("context"):
     # → 이 context id가 우리가 원하는 것 → 이 id를 가진 값 태그를 찾아 읽음
 ```
 
-그런데 삼성생명처럼 `InsuranceContractsByComponentsAxis` 없이 2-dim으로만 저장한 회사는  
-3-dim 조건으로 찾으면 매칭이 안 됩니다.  
-그래서 스크립트는 **패턴A(2-dim) → 패턴B(3-dim) → 패턴C(5~6-dim)** 순서로 시도하고,  
+회사를 미리 식별하는 게 아니라 **조건 자체를 순서대로 시도**합니다.  
+각 컬럼마다 "이 조건 → 안 되면 이 조건 → 그것도 안 되면 이 조건" 순서로 패턴이 정의되어 있고,  
 처음 매칭되는 패턴의 값을 사용합니다.
+
+```python
+def parse_insurance_components(root):
+    # 패턴A 먼저 시도 (삼성생명 2-dim: DisaggregationAxis에 BEL/RA/CSM 직접)
+    for ctx in ...:
+        if dims["DisaggregationAxis"] == "EstimatesOfPresentValueOfFutureCashFlowsMember":
+            bel = 이 context의 값
+            return bel          # 찾으면 바로 반환
+
+    # 패턴A 실패 → 패턴B 시도 (교보 등 3-dim: IssuedMember + ComponentsAxis)
+    for ctx in ...:
+        if dims["DisaggregationAxis"] == "InsuranceContractsIssuedMember"
+        and dims["ComponentsAxis"] == "EstimatesOfPresentValueOfFutureCashFlowsMember":
+            bel = 이 context의 값
+            return bel
+
+    # 패턴B도 실패 → 패턴C 시도 (현대해상 등 5~6-dim: 보험종류별 합산)
+    for ctx in ...:
+        if dims["InsuranceContractsAxis"] == "InsuranceContractsOtherThan..."
+        and dims["ComponentsAxis"] == "EstimatesOfPresentValueOfFutureCashFlowsMember":
+            bel += 이 context의 값     # 여러 개 합산
+    return bel
+```
+
+이 구조 덕분에 새 회사가 추가되거나 구조가 바뀌어도 기존 패턴에 매칭되면 자동 처리되고,  
+안 되면 새 패턴만 추가하면 됩니다.
 
 #### OCI 세부잔액 (Col25~30) — 3번째 axis 이름이 회사마다 달라서 MISS 발생
 
