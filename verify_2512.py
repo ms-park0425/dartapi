@@ -78,7 +78,7 @@ def compare(answer, output, tol=0.01):
             continue
         ans = answer[csv_key]
 
-        CHECK_COLS = {31, 45, 46, 47, 64, 72, 82, 89, 90, 159}
+        CHECK_COLS = {31, 45, 46, 47, 64, 72, 82, 89, 90, 92, 93, 94, 159}
         for col_num, expected in ans.items():
             if col_num in (1, 2, 3):
                 continue

@@ -518,10 +518,13 @@ def parse_fvoci_oci(xbrl_path, target_year="2025", ref_date=None, start_date=Non
 
 def parse_oci_accumulated(xbrl_path, target_year="2025", ref_date=None):
     """
-    OCI 누계 항목 파싱. 두 가지 구조 지원:
+    OCI 누계 항목 파싱. 세 가지 구조 지원:
     - 패턴A (미래에셋): 3-dim (Separate + OtherComprehensiveIncomeLossAccumulatedAmountMember + entity-specific), tag=Equity
     - 패턴B (삼성생명): 2-dim (Separate + ComponentsOfEquityAxis member), tag=OtherComprehensiveIncomeLossAccumulatedAmount
-    반환: {"cur": {keyword: value_won}, "prior": {keyword: value_won}}
+    - 패턴C (DB손보/현대해상): 2-dim (Separate + CarryingAmountAxis→ReportedAmountMember), individual ifrs-full reserve tags
+    반환: {"cur": {keyword: value_won}, "prior": {keyword: value_won},
+           "cur_direct": {col: value_won}, "prior_direct": {col: value_won}}
+    cur_direct/prior_direct는 패턴C에서 col번호로 직접 매핑된 값.
     """
     if ref_date is None:
         ref_date = f"{target_year}-12-31"
@@ -531,9 +534,39 @@ def parse_oci_accumulated(xbrl_path, target_year="2025", ref_date=None):
     tree = ET.parse(xbrl_path)
     root = tree.getroot()
 
-    result = {"cur": {}, "prior": {}}
+    result = {"cur": {}, "prior": {}, "cur_direct": {}, "prior_direct": {}}
 
-    # 패턴A: 3-dim
+    # 패턴C: CarryingAmountAxis → ReportedAmountMember 에서 개별 ifrs-full reserve 태그 직접 읽기
+    # (DB손보, 현대해상 패턴)
+    # tag → col 매핑 (ifrs-full 로컬 이름 → col번호)
+    PATC_TAG_TO_COL = {
+        # Col26: 보험계약 금융손익 OCI
+        "ReserveOfInsuranceFinanceIncomeExpensesFromInsuranceContractsIssuedExcludedFromProfitOrLossThatWillBeReclassifiedToProfitOrLoss": 26,
+        # Col27: 재보험계약 금융손익 OCI
+        "ReserveOfFinanceIncomeExpensesFromReinsuranceContractsHeldExcludedFromProfitOrLoss": 27,
+        # Col28: 현금흐름위험회피 OCI + 해외사업환산 (OCI_ACCUM_MAPPING col28 keywords 포함)
+        "ReserveOfCashFlowHedges": 28,
+        "ReserveOfCashFlowHedgesContinuingHedges": 28,
+        "ReserveOfExchangeDifferencesOnTranslation": 28,
+        # Col29: 재평가잉여금
+        "RevaluationSurplus": 29,
+        # Col30: 확정급여부채 재측정
+        "ReserveOfRemeasurementsOfDefinedBenefitPlans": 30,
+    }
+    # Col25 FVOCI: entity-specific dart tag with keyword → col 25
+    PATC_FVOCI_KEYWORDS = (
+        "ReserveOfGainsAndLossesOnFinancialAssetsAtFairValueThroughOtherComprehensiveIncome",
+        "ReserveOfGainsAndLossesOnDebtInstrumentsAtFairValueThroughOtherComprehensiveIncome",
+        "ReserveOfGainsAndLossesFromInvestmentsInEquityInstruments",
+        "ReserveOfGainsAndLossesOnFinancialAssets",
+    )
+    # dart hedge reserve tags for Col28 fallback
+    PATC_HEDGE_KEYWORDS = (
+        "ReserveOfGainsAndLossesOnHedgingDerivatives",
+        "ReserveOfGainsAndLossesOnHedgingInstrument",
+        "HedgingReserve",
+    )
+
     for ctx in root.findall(f"{{{NS_XBRLI}}}context"):
         period = ctx.find(f"{{{NS_XBRLI}}}period")
         instant = period.find(f"{{{NS_XBRLI}}}instant")
@@ -580,7 +613,40 @@ def parse_oci_accumulated(xbrl_path, target_year="2025", ref_date=None):
                 if k in ("ComponentsOfEquityAxis", "ReservesWithinEquityAxis"):
                     oci_member = v
             if not oci_member:
+                # 패턴C: CarryingAmountAxis → ReportedAmountMember
+                carry_val = dims.get("CarryingAmountAccumulatedDepreciationAmortisationAndImpairmentAndGrossCarryingAmountAxis", "")
+                if "ReportedAmountMember" not in carry_val:
+                    continue
+                ctx_id = ctx.get("id", "")
+                direct_bucket = f"{bucket}_direct"
+                fvoci_total = 0.0
+                hedge_val = 0.0
+                for elem in root:
+                    if elem.get("contextRef") != ctx_id or not elem.text:
+                        continue
+                    tag = elem.tag.split("}")[-1] if "}" in elem.tag else elem.tag
+                    try:
+                        v = float(elem.text.strip())
+                    except ValueError:
+                        continue
+                    if tag in PATC_TAG_TO_COL:
+                        col = PATC_TAG_TO_COL[tag]
+                        # Col28은 여러 항목 합산 (CFH + 해외사업환산 등)
+                        if col == 28:
+                            result[direct_bucket][col] = result[direct_bucket].get(col, 0.0) + v
+                        elif col not in result[direct_bucket]:
+                            result[direct_bucket][col] = v
+                    elif any(kw in tag for kw in PATC_FVOCI_KEYWORDS):
+                        fvoci_total += v
+                    elif any(kw in tag for kw in PATC_HEDGE_KEYWORDS):
+                        hedge_val += v
+                if fvoci_total != 0.0 and 25 not in result[direct_bucket]:
+                    result[direct_bucket][25] = fvoci_total
+                if hedge_val != 0.0:
+                    # Col28에 hedge_val 합산 (ExchangeDifferences가 이미 있을 수 있음)
+                    result[direct_bucket][28] = result[direct_bucket].get(28, 0.0) + hedge_val
                 continue
+
             # Reserve of FVOCI / Insurance OCI / Reinsurance OCI / CFH / Revaluation / DefinedBenefit
             if not any(kw in oci_member for kw in ("GainsAndLossesOnFinancialAssets", "InsuranceFinance",
                                                      "ReinsuranceFinance", "CashFlowHedges",
@@ -1292,6 +1358,480 @@ def parse_insurance_components_from_doc(corp_name, target_sum, year="2025"):
     return {"CSM": 0.0, "BEL": 0.0, "RA": 0.0}
 
 
+def _extract_components_from_doc_q1(filepath):
+    """분기보고서 document.xml에서 당기말 잔액 테이블의 BEL/RA/CSM 추출.
+
+    패턴A (교보/신한라이프/KB생명/메리츠화재/KB손보):
+      헤더: 구분|포트폴리오|일반모형|[변동수수료접근법]|[보험료배분접근법]|최선추정부채|위험조정|보험계약마진|...
+      합계행: 합 계|BEL1|RA1|CSM1|[BEL2|RA2|CSM2]|[PAA_total]
+
+    패턴B (한화생명/동양생명/삼성화재):
+      헤더: 발행한 보험계약|보험료배분접근법 제외|구성요소별|BEL|RA|CSM|합계
+      기말행: 기말 보험계약부채(자산) 또는 기말 장부금액 | BEL|RA|CSM|합계
+
+    패턴C (삼성생명):
+      헤더: 발행한 보험계약|일반모형|VFA|BEL_GM|RA_GM|CSM_GM|BEL_VFA|RA_VFA|CSM_VFA
+      데이터행: 보험계약부채(자산)|BEL_GM|RA_GM|CSM_GM|BEL_VFA|RA_VFA|CSM_VFA
+
+    패턴D (현대해상):
+      헤더: 발행한 보험계약|잔여보장부채|구성요소별|BEL|RA|CSM
+      데이터행: 보험계약부채(자산)|BEL|RA|CSM  (원 단위)
+
+    패턴E (DB손해보험):
+      테이블1 생명보험계약: 기말 장부금액|BEL|RA|PAA잔여|PAA손실|합계  (BEL/RA만)
+      테이블2 비생명보험계약: 기말 장부금액|BEL|RA|CSM(하위분류들)|합계  (BEL+RA+CSM)
+      두 테이블의 BEL/RA 합산, CSM은 비생명보험만
+
+    패턴F (미래에셋생명):
+      텍스트에서 '최선추정부채 N조 N,NNN 억원, 위험조정 N,NNN 억원, 보험계약마진 N조 N,NNN 억원' 파싱
+
+    단위 감지:
+      - 테이블 내부 (단위 : 억원) → × 100 → 백만원
+      - 원 단위 (큰 숫자 또는 '단위 : 원') → / 1e6 → 백만원
+
+    반환: (bel_백만원, ra_백만원, csm_백만원) 또는 (None, None, None)
+    """
+    try:
+        with open(filepath, encoding="utf-8") as f:
+            content = f.read()
+    except Exception:
+        return None, None, None
+
+    table_pattern = re.compile(r"<TABLE[^>]*>(.*?)</TABLE>", re.DOTALL | re.IGNORECASE)
+
+    def _detect_unit(text, tm_start, fallback_range=3000):
+        """단위 감지: 1=백만원, 100=억원(×100→백만원), 1e-6=원(/1e6→백만원)"""
+        unit_in_table = re.search(r"단위\s*[:\s]\s*(억원|백만원|원)", text)
+        if unit_in_table:
+            u = unit_in_table.group(1)
+            if "억원" in u:
+                return 100
+            if "원" in u and "백만" not in u:
+                return 1e-6
+            return 1
+        before = content[max(0, tm_start - fallback_range): tm_start]
+        before_text = re.sub(r"<[^>]+>", " ", before)
+        unit_before = re.search(r"단위\s*[:\s]\s*(억원|백만원|원)", before_text)
+        if unit_before:
+            u = unit_before.group(1)
+            if "억원" in u:
+                return 100
+            if "원" in u and "백만" not in u:
+                return 1e-6
+        return 1
+
+    def _parse_cells(row_fragment, stop_on_label=False):
+        """셀 문자열 → 숫자 리스트 (None=빈칸/대시).
+        stop_on_label=True: 한글/영문 레이블 셀을 만나면 파싱 중단.
+        """
+        cells = row_fragment.split("|")[1:]
+        nums = []
+        started = False  # 첫 숫자가 나왔는지 여부
+        for cell in cells:
+            cell = cell.strip()
+            if not cell or cell in ("-", "- "):
+                if stop_on_label and started:
+                    nums.append(None)
+                elif not stop_on_label:
+                    nums.append(None)
+                continue
+            neg_m = re.match(r"^\(([0-9,]+)\)$", cell)
+            pos_m = re.match(r"^-?([0-9,]+)$", cell)
+            if neg_m:
+                started = True
+                nums.append(-int(neg_m.group(1).replace(",", "")))
+            elif pos_m:
+                started = True
+                v = int(cell.replace(",", "").replace("-", "") or "0")
+                if cell.startswith("-"):
+                    v = -v
+                nums.append(v)
+            else:
+                # 한글/영문 레이블 → stop_on_label이면 중단
+                if stop_on_label and started:
+                    break
+                nums.append(None)
+        return nums
+
+    # ── 패턴A: 기존 로직 (교보/신한라이프/KB생명/메리츠화재/KB손보) ──────────
+    # 연결+별도 두 테이블이 있을 경우 별도(마지막) 테이블을 써야 하므로 모두 수집 후 마지막 반환
+    pattern_a_candidates = []
+    for tm in table_pattern.finditer(content):
+        tbl_raw = tm.group(1)
+        text = re.sub(r"<[^>]+>", "|", tbl_raw)
+        text = re.sub(r"\|[\s|]+\|", "|", text)
+        text = re.sub(r"\s+", " ", text).strip()
+
+        header = text[:600]
+        if not ("최선추정부채" in header or "미래 현금흐름의 현재가치추정치" in header):
+            continue
+        if "재보험" in header[:300] or "출재" in header[:300]:
+            continue
+        if "보험계약마진" not in header:
+            continue
+
+        sum_row_match = re.search(r"합\s*계\s*\|([^|].*?)(?:\||$)", text)
+        if not sum_row_match:
+            continue
+
+        unit_factor = _detect_unit(text, tm.start())
+
+        row_start = text.find("합 계")
+        if row_start == -1:
+            row_start = text.find("합계")
+        row_fragment = text[row_start:row_start + 400]
+        nums = _parse_cells(row_fragment)
+        valid_nums = [n for n in nums if n is not None]
+        if len(valid_nums) < 3:
+            continue
+
+        has_vfa = "변동수수료" in header
+        if has_vfa and len(valid_nums) >= 6:
+            bel = valid_nums[0] + valid_nums[3]
+            ra  = valid_nums[1] + valid_nums[4]
+            csm = valid_nums[2] + valid_nums[5]
+        else:
+            bel = valid_nums[0]
+            ra  = valid_nums[1]
+            csm = valid_nums[2]
+
+        if csm < 0:
+            continue
+
+        pattern_a_candidates.append((bel * unit_factor, ra * unit_factor, csm * unit_factor))
+
+    if pattern_a_candidates:
+        # 연결 테이블이 먼저, 별도 테이블이 나중에 오는 구조 → 마지막(별도) 사용
+        return pattern_a_candidates[-1]
+
+    # ── 패턴B: 기말 장부금액 / 기말 보험계약부채 행 파싱 ──────────────────────
+    # (한화생명, 동양생명, 삼성화재)
+    # 헤더에 '현재가치 추정치' (공백 포함) + '보험계약마진' + '기말'
+    # 단일 테이블에 기초→기말 변동 구조. 첫 번째 매칭만 사용 (당분기).
+    for tm in table_pattern.finditer(content):
+        tbl_raw = tm.group(1)
+        text = re.sub(r"<[^>]+>", "|", tbl_raw)
+        text = re.sub(r"\|[\s|]+\|", "|", text)
+        text = re.sub(r"\s+", " ", text).strip()
+
+        header = text[:800]
+        if "현재가치 추정치" not in header and "현재가치추정치" not in header:
+            continue
+        if "보험계약마진" not in header:
+            continue
+        if "재보험" in header[:300] or "출재" in header[:300]:
+            continue
+        # 기말 행이 있어야 함
+        if "기말" not in text:
+            continue
+        # 기초 행도 있어야 변동표 (잔액 테이블 제외)
+        if "기초" not in text:
+            continue
+        # 포트폴리오별 세부 테이블 제외 (미래에셋 패턴 - 계약의 유형 분류 있음)
+        # 이런 테이블은 합계가 아닌 개별 포트폴리오 → 패턴F(텍스트)로 처리
+        if "계약의 유형" in header[:500]:
+            continue
+
+        # 기말 보험계약부채(자산) 행 우선, 없으면 기말 장부금액 행
+        # 우선순위: 기말 장부금액 > 기말 보험계약부채(자산) 집계행
+        # (DB손보 패턴: '기말 보험계약부채' 뒤에 '자산인...' 레이블 행이 먼저 나와서
+        #  stop_on_label로 자산값이 잡힐 수 있음 → '기말 장부금액' 직접 행이 더 안전)
+        end_kw = None
+        end_idx = -1
+        for kw in ["기말 장부금액", "기말 보험계약부채"]:
+            idx = text.rfind(kw)
+            if idx >= 0:
+                # stop_on_label로 첫 번째 숫자 시퀀스만 추출 (다음 레이블 행 제외)
+                row_frag = text[idx:idx + 400]
+                nums = _parse_cells(row_frag, stop_on_label=True)
+                valid_nums = [n for n in nums if n is not None]
+                if not valid_nums or max(abs(v) for v in valid_nums) < 1000:
+                    continue  # 소액 행 (자산인 보험계약 등) → 건너뜀
+                # 첫 번째 값이 양수여야 BEL (음수면 자산인 보험계약 값이 섞인 것)
+                if valid_nums[0] < 0:
+                    continue
+                end_kw = kw
+                end_idx = idx
+                break
+        if end_kw is None:
+            continue
+
+        unit_factor = _detect_unit(text, tm.start())
+
+        row_frag = text[end_idx:end_idx + 400]
+        nums = _parse_cells(row_frag, stop_on_label=True)
+        valid_nums = [n for n in nums if n is not None]
+        if len(valid_nums) < 3:
+            continue
+
+        # 구조: [BEL|RA|CSM_하위분류들|합계] 또는 [BEL|RA|CSM|합계]
+        # 헤더에 VFA가 있으면 CSM 하위분류가 여럿 → 합산
+        # 합계가 마지막 값
+        has_vfa = "변동수수료" in header
+        if has_vfa:
+            # BEL=0, RA=1, CSM_sub들=2~-2, 합계=-1
+            bel = valid_nums[0]
+            ra  = valid_nums[1]
+            total = valid_nums[-1]
+            csm = total - bel - ra
+        else:
+            # [BEL|RA|CSM|합계] 또는 [BEL|RA|CSM하위1|CSM하위2|...|합계]
+            bel = valid_nums[0]
+            ra  = valid_nums[1]
+            total = valid_nums[-1]
+            csm = total - bel - ra
+
+        if csm < 0:
+            # 동양생명: CSM 하위분류가 수정소급법+공정가치법+기타 → 3개 합산
+            # 구조: [BEL|RA|CSM_수정|CSM_공정|CSM_기타|합계]
+            if len(valid_nums) >= 5:
+                csm = sum(valid_nums[2:-1])
+            if csm < 0:
+                continue
+
+        return bel * unit_factor, ra * unit_factor, csm * unit_factor
+
+    # ── 패턴C: 삼성생명 (일반모형+VFA 잔액 테이블) ────────────────────────────
+    # 헤더: 보험계약|일반모형|VFA|BEL|RA|CSM|BEL|RA|CSM
+    # 데이터행: 보험계약부채(자산)|BEL_GM|RA_GM|CSM_GM|BEL_VFA|RA_VFA|CSM_VFA
+    for tm in table_pattern.finditer(content):
+        tbl_raw = tm.group(1)
+        text = re.sub(r"<[^>]+>", "|", tbl_raw)
+        text = re.sub(r"\|[\s|]+\|", "|", text)
+        text = re.sub(r"\s+", " ", text).strip()
+
+        header = text[:800]
+        if "현재가치 추정치" not in header and "현재가치추정치" not in header:
+            continue
+        if "보험계약마진" not in header:
+            continue
+        if "재보험" in header[:300] or "출재" in header[:300]:
+            continue
+        # 삼성생명 패턴: 일반모형 + 변동수수료접근법 헤더 + 보험계약부채(자산) 데이터행
+        if "일반모형" not in header or "변동수수료접근법" not in header:
+            continue
+        if "보험계약부채(자산)" not in text:
+            continue
+
+        # 계약 유형/약정 유형 등 세부 분류 없는 단순 합계 테이블
+        if "계약의 유형" in header or "약정의 유형" in header:
+            continue
+
+        unit_factor = _detect_unit(text, tm.start())
+
+        # '보험계약부채(자산)' 행 찾기
+        idx = text.find("보험계약부채(자산)")
+        if idx < 0:
+            continue
+        row_frag = text[idx:idx + 400]
+        nums = _parse_cells(row_frag)
+        valid_nums = [n for n in nums if n is not None]
+        if len(valid_nums) < 6:
+            continue
+
+        # [BEL_GM|RA_GM|CSM_GM|BEL_VFA|RA_VFA|CSM_VFA]
+        bel = valid_nums[0] + valid_nums[3]
+        ra  = valid_nums[1] + valid_nums[4]
+        csm = valid_nums[2] + valid_nums[5]
+
+        if csm < 0:
+            continue
+
+        return bel * unit_factor, ra * unit_factor, csm * unit_factor
+
+    # ── 패턴D: 현대해상 (원 단위 단일 잔액 테이블) ────────────────────────────
+    # 헤더: 발행한 보험계약|잔여보장부채와 발생사고부채|잔여보장부채|구성요소별|BEL|RA|CSM
+    # 데이터: 보험계약부채(자산)|BEL|RA|CSM  (숫자 정확히 3개)
+    # 특징: '잔여보장부채와 발생사고부채' 포함 + 기초/기말 없음 + 정확히 3개 숫자
+    for tm in table_pattern.finditer(content):
+        tbl_raw = tm.group(1)
+        text = re.sub(r"<[^>]+>", "|", tbl_raw)
+        text = re.sub(r"\|[\s|]+\|", "|", text)
+        text = re.sub(r"\s+", " ", text).strip()
+
+        header = text[:800]
+        if "현재가치 추정치" not in header and "현재가치추정치" not in header:
+            continue
+        if "보험계약마진" not in header:
+            continue
+        if "재보험" in header[:300] or "출재" in header[:300]:
+            continue
+        # 현대해상 특유 헤더: '잔여보장부채와 발생사고부채' 포함
+        if "잔여보장부채와 발생사고부채" not in header:
+            continue
+        # 변동표가 아닌 잔액 테이블: 기초/기말 행 없음
+        if "기초" in text or "기말" in text:
+            continue
+        if "보험계약부채(자산)" not in text:
+            continue
+        # 미래 현금유출액 테이블 제외 (미래에셋 스타일 세부 분류)
+        if "미래 현금유출액의 현재가치 추정치" in header:
+            continue
+
+        idx = text.find("보험계약부채(자산)")
+        if idx < 0:
+            continue
+        row_frag = text[idx:idx + 400]
+        nums = _parse_cells(row_frag, stop_on_label=True)
+        valid_nums = [n for n in nums if n is not None]
+        if len(valid_nums) < 3:
+            continue
+        # 정확히 3개 또는 4개(합계포함) 숫자여야 함 (세부 분류 테이블 제외)
+        if len(valid_nums) > 5:
+            continue
+
+        # 원 단위 감지 (큰 값)
+        unit_factor = _detect_unit(text, tm.start())
+        if unit_factor == 1:
+            # 값이 1e10 이상이면 원 단위로 판단
+            if max(abs(v) for v in valid_nums if v is not None) > 1e10:
+                unit_factor = 1e-6
+
+        bel = valid_nums[0]
+        ra  = valid_nums[1]
+        csm = valid_nums[2]
+
+        if csm < 0:
+            continue
+
+        return bel * unit_factor, ra * unit_factor, csm * unit_factor
+
+    # ── 패턴E: DB손해보험 (생명+비생명 두 테이블 합산) ────────────────────────
+    # 생명보험계약 테이블: 기말 장부금액|BEL|RA|PAA잔여|PAA손실|합계 (CSM없음)
+    # 비생명보험계약 테이블: 기말 장부금액|BEL|RA|CSM하위분류들|합계
+    life_bel = life_ra = non_life_bel = non_life_ra = non_life_csm = None
+
+    for tm in table_pattern.finditer(content):
+        tbl_raw = tm.group(1)
+        text = re.sub(r"<[^>]+>", "|", tbl_raw)
+        text = re.sub(r"\|[\s|]+\|", "|", text)
+        text = re.sub(r"\s+", " ", text).strip()
+
+        header = text[:800]
+        if "현재가치 추정치" not in header and "현재가치추정치" not in header:
+            continue
+        if "재보험" in header[:300] or "출재" in header[:300]:
+            continue
+        if "기말" not in text:
+            continue
+
+        is_life = "생명보험계약" in header[:500] and "비생명" not in header[:300]
+        is_non_life = "비생명보험계약" in header[:500]
+        if not is_life and not is_non_life:
+            continue
+
+        unit_factor = _detect_unit(text, tm.start())
+
+        idx = text.rfind("기말 장부금액")
+        if idx < 0:
+            idx = text.rfind("기말 보험계약부채")
+        if idx < 0:
+            continue
+
+        row_frag = text[idx:idx + 400]
+        nums = _parse_cells(row_frag, stop_on_label=True)
+        valid_nums = [n for n in nums if n is not None]
+        if len(valid_nums) < 3:
+            continue
+
+        # 소액 행 (자산인 보험계약) 제외
+        if max(abs(v) for v in valid_nums) < 1000:
+            continue
+
+        if is_life and life_bel is None:
+            # 생명보험: BEL|RA|PAA잔여|PAA손실|합계 (CSM없음)
+            life_bel = valid_nums[0] * unit_factor
+            life_ra  = valid_nums[1] * unit_factor
+
+        if is_non_life and non_life_bel is None:
+            if "보험계약마진" not in header:
+                continue
+            # 비생명보험: BEL|RA|CSM하위분류들|합계
+            bel_nl = valid_nums[0]
+            ra_nl  = valid_nums[1]
+            total_nl = valid_nums[-1]
+            csm_nl = total_nl - bel_nl - ra_nl
+            if csm_nl < 0:
+                csm_nl = sum(valid_nums[2:-1])
+            if csm_nl >= 0:
+                non_life_bel = bel_nl * unit_factor
+                non_life_ra  = ra_nl  * unit_factor
+                non_life_csm = csm_nl * unit_factor
+
+    if non_life_bel is not None:
+        bel_total = (non_life_bel or 0) + (life_bel or 0)
+        ra_total  = (non_life_ra  or 0) + (life_ra  or 0)
+        csm_total = non_life_csm or 0
+        return bel_total, ra_total, csm_total
+
+    # ── 패턴F: 미래에셋 (텍스트에서 조억원 파싱) ──────────────────────────────
+    # '보험부채는 최선추정부채 N조 N,NNN 억원, 위험조정 N,NNN 억원, 보험계약마진 N조 N,NNN 억원'
+    # 또는 '최선추정부채 N조 N,NNN 억원' 단독
+    # 억원 → 백만원: × 100
+    def _parse_jo_ek(s):
+        """'N조 N,NNN 억원' 또는 'N,NNN 억원' → 백만원"""
+        m = re.search(r"([\d,]+)\s*조\s*([\d,]+)\s*억원", s)
+        if m:
+            return (int(m.group(1).replace(",", "")) * 10000
+                    + int(m.group(2).replace(",", ""))) * 100
+        m2 = re.search(r"([\d,]+)\s*억원", s)
+        if m2:
+            return int(m2.group(1).replace(",", "")) * 100
+        return None
+
+    idx = content.find("최선추정부채")
+    while idx >= 0:
+        region = content[idx:idx + 300]
+        clean = re.sub(r"<[^>]+>", " ", region)
+        clean = re.sub(r"\s+", " ", clean).strip()
+        if "억원" in clean:
+            bel_v = _parse_jo_ek(clean)
+            ra_v  = None
+            csm_v = None
+            # 위험조정
+            m_ra = re.search(r"위험조정\s+([\d,]+)\s*억원", clean)
+            if m_ra:
+                ra_v = int(m_ra.group(1).replace(",", "")) * 100
+            # 보험계약마진
+            m_csm = re.search(r"보험계약마진\s+([\d,]+)\s*조\s*([\d,]+)\s*억원", clean)
+            if m_csm:
+                csm_v = (int(m_csm.group(1).replace(",", "")) * 10000
+                         + int(m_csm.group(2).replace(",", ""))) * 100
+            else:
+                m_csm2 = re.search(r"보험계약마진\s+([\d,]+)\s*억원", clean)
+                if m_csm2:
+                    csm_v = int(m_csm2.group(1).replace(",", "")) * 100
+            if bel_v and ra_v and csm_v:
+                return bel_v, ra_v, csm_v
+        idx = content.find("최선추정부채", idx + 1)
+
+    return None, None, None
+
+
+def _get_q1_doc_path(corp_name, year):
+    """분기보고서 doc.xml 경로 반환. 없으면 다운로드 시도. 실패시 None."""
+    cache_path = os.path.join("data", corp_name, f"doc_1q_{year}.xml")
+    if os.path.exists(cache_path):
+        return cache_path
+
+    # 다운로드 시도 (ALL_CORP_CODES에 있는 모든 회사)
+    corp_code = ALL_CORP_CODES.get(corp_name)
+    if not corp_code:
+        return None
+    try:
+        from dart_api import find_rcept_no, _fetch_document_content
+        os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+        rcept_no = find_rcept_no(corp_code, year, "11013")
+        content = _fetch_document_content(rcept_no)
+        with open(cache_path, "w", encoding="utf-8") as f:
+            f.write(content)
+        print(f"    doc_1q_{year}.xml 다운로드 완료: {cache_path}")
+        return cache_path
+    except Exception as e:
+        print(f"    doc_1q_{year}.xml 다운로드 실패 ({corp_name}): {e}")
+        return None
+
+
 def _extract_components_from_doc(filepath, target_sum):
     """document.xml 변동표에서 기초 BEL/RA/CSM 추출. target_sum은 백만원 단위.
     생보사: target_sum ≈ grand합 (0.5% 이내)
@@ -1725,6 +2265,137 @@ def _get_annual_doc(corp_name, year="2025"):
         return None
 
 
+def _extract_kics_from_q1(filepath, target_year="2025"):
+    """1분기보고서 doc.xml에서 전년도(target_year) K-ICS 최종 확정치 추출.
+    TR 기반: 헤더 TR에서 target_year 포함 TD의 열 인덱스를 찾고,
+    데이터 TR에서 같은 열 인덱스 값을 가져옴.
+    반환: {95: 비율, 96: 가용자본(백만원), 97: 요구자본(백만원)}
+    """
+    try:
+        with open(filepath, encoding="utf-8") as f:
+            content = f.read()
+    except Exception:
+        return {}
+
+    def _pf(s):
+        try:
+            return float(s.replace(',', '').replace('(', '-').replace(')', '').strip())
+        except (ValueError, AttributeError):
+            return None
+
+    AVAIL_KWS = ('지급여력(A)', '지급여력금액(A)', '가용자본(A)', '가용자본')
+    REQ_KWS   = ('지급여력기준(B)', '지급여력기준금액(B)', '요구자본', '지급여력(B)', '지급여력기준')
+    RATIO_KWS = ('지급여력비율(A/B)', '지급여력비율', 'A/B')
+
+    table_pattern = re.compile(r'<TABLE[^>]*>(.*?)</TABLE>', re.DOTALL | re.IGNORECASE)
+    for m in table_pattern.finditer(content):
+        t = m.group(1)
+        plain = re.sub(r'<[^>]+>', '', t)
+        if not ('지급여력' in plain[:500] or '가용자본' in plain[:500]):
+            continue
+        if '개선권고' in plain[:200] or '경영개선' in plain[:200]:
+            continue
+        # 숫자 데이터 있어야 함 (쉼표 포함 금액 또는 5자리 이상 연속 숫자)
+        if not re.search(r'\d[\d,]{4,}', plain):
+            continue
+
+        # 단위 감지
+        before_text = re.sub(r'<[^>]+>', ' ', content[max(0, m.start()-500):m.start()])
+        unit_m = re.search(r'단위\s*[:\s]\s*(억원|백만원|원)', before_text + plain[:300])
+        unit_factor = 1
+        if unit_m:
+            u = unit_m.group(1)
+            if '억원' in u:
+                unit_factor = 100
+            elif '원' in u and '백만' not in u:
+                unit_factor = 1e-6
+
+        # TR 기반 파싱
+        rows = re.split(r'<TR[^>]*>', t, flags=re.IGNORECASE)
+
+        def tr_cells(row):
+            tds = re.findall(r'<(?:TD|TH)[^>]*>(.*?)</(?:TD|TH)>', row, re.DOTALL | re.IGNORECASE)
+            return [re.sub(r'<[^>]+>', '', td).strip() for td in tds]
+
+        # 헤더 TR에서 target_year 포함 TD의 열 인덱스(0-based) 찾기
+        # COLSPAN 고려: 헤더 TD의 COLSPAN만큼 데이터 열 인덱스를 누적
+        year_col = None
+        for row in rows[:6]:
+            tds_raw = re.findall(r'<(?:TD|TH)([^>]*)>(.*?)</(?:TD|TH)>', row, re.DOTALL | re.IGNORECASE)
+            if not tds_raw:
+                continue
+            col_offset = 0  # 현재까지 누적된 실제 열 인덱스
+            for attrs, inner in tds_raw:
+                label = re.sub(r'<[^>]+>', '', inner).strip()
+                cs_m = re.search(r'COLSPAN=["\'](\d+)', attrs, re.IGNORECASE)
+                colspan = int(cs_m.group(1)) if cs_m else 1
+                if col_offset > 0 and target_year in label:
+                    year_col = col_offset  # 이 TD가 시작하는 실제 열 인덱스
+                    break
+                col_offset += colspan
+            if year_col is not None:
+                break
+
+        # target_year를 못 찾으면 → 기수(期數) 방식: 두 번째 데이터열(index=2) 사용
+        if year_col is None:
+            for row in rows[:3]:
+                tds_raw = re.findall(r'<(?:TD|TH)([^>]*)>(.*?)</(?:TD|TH)>', row, re.DOTALL | re.IGNORECASE)
+                labels = [re.sub(r'<[^>]+>', '', inner).strip() for _, inner in tds_raw]
+                # 헤더 행: 구분열 + 연도/기수 레이블 여러 개
+                is_header = any(re.search(r'\d{2,}기|분기|FY\d{4}|\d{4}년', c) for c in labels[1:])
+                if is_header and len(labels) >= 3:
+                    year_col = 2  # 0-based: 구분=0, 당기=1, 전기(target_year)=2
+                    break
+
+        if year_col is None:
+            continue
+
+        # 데이터 TR에서 year_col 위치 값 수집
+        avail = req = ratio = None
+        for row in rows:
+            cells = tr_cells(row)
+            if not cells or year_col >= len(cells):
+                continue
+            label = cells[0].strip()
+            val_str = cells[year_col].strip()
+            if val_str in ('-', '산출중', '미정', ''):
+                continue
+            val = _pf(val_str)
+            if val is None:
+                continue
+
+            if any(kw in label for kw in AVAIL_KWS) and '요구' not in label and '기준' not in label:
+                if avail is None:
+                    avail = val
+            elif any(kw in label for kw in REQ_KWS):
+                if req is None:
+                    req = val
+            elif any(kw in label for kw in RATIO_KWS):
+                if ratio is None:
+                    ratio = val
+
+        if avail is None or req is None or ratio is None:
+            continue
+
+        # 단위 적용
+        def _apply_unit(v, uf):
+            if uf != 1:
+                return v * uf
+            return v * 100 if v < 100000 else v
+
+        avail2 = _apply_unit(avail, unit_factor)
+        req2   = _apply_unit(req,   unit_factor)
+        ratio2 = ratio / 100 if ratio > 10 else ratio
+
+        # 일관성 검증: avail/req ≈ ratio (5% 오차)
+        if req2 > 0 and abs(avail2 / req2 - ratio2) / max(ratio2, 1e-9) > 0.05:
+            continue
+
+        return {95: ratio2, 96: avail2, 97: req2}
+
+    return {}
+
+
 def _extract_kics(filepath):
     """사업보고서 doc.xml에서 K-ICS 지급여력비율/가용자본/요구자본 추출.
     반환: {92: 비율(소수), 93: 가용자본(백만원), 94: 요구자본(백만원)}
@@ -1735,13 +2406,61 @@ def _extract_kics(filepath):
     except Exception:
         return {}
 
+    def _parse_float(s):
+        try:
+            return float(s.replace(',', '').replace('(', '-').replace(')', '').strip())
+        except (ValueError, AttributeError):
+            return 0.0
+
+    def _fix_unit(lst):
+        return [v * 100 if v < 100000 else v for v in lst]
+
+    def _build_result(ratios, avails, reqs):
+        if not ratios or not avails or not reqs:
+            return {}
+        avails = _fix_unit(avails)
+        reqs = _fix_unit(reqs)
+        r = {}
+        if ratios: r[95] = ratios[0]; r[92] = ratios[0]
+        if avails: r[96] = avails[0]; r[93] = avails[0]
+        if reqs:   r[97] = reqs[0];  r[94] = reqs[0]
+        return r
+
+    def _parse_table_cells(text):
+        """TABLE 텍스트에서 K-ICS 수치 추출. (기존 로직)"""
+        cells = text.split('|')
+        ratios, avails, reqs = [], [], []
+        for i, cell in enumerate(cells):
+            cs = cell.strip()
+            if '지급여력비율' in cs or ('비율' in cs and 'A/B' in cs):
+                row = [c.strip() for c in cells[i+1:i+10]]
+                if row and row[0] in ('-', '산출중', '미정'):
+                    break
+                for v in row:
+                    n = _parse_float(v)
+                    if 50 < n < 1000:
+                        ratios.append(n / 100)
+            elif '지급여력금액' in cs or '지급여력(A)' in cs or ('가용자본' in cs and '요구' not in cs and '기준' not in cs):
+                row = [c.strip() for c in cells[i+1:i+8]]
+                for v in row:
+                    n = _parse_num(v)
+                    if n > 1000:
+                        avails.append(n)
+            elif '지급여력기준' in cs or '지급여력기준금액' in cs or '요구자본' in cs or '지급여력(B)' in cs:
+                row = [c.strip() for c in cells[i+1:i+8]]
+                for v in row:
+                    n = _parse_num(v)
+                    if n > 1000:
+                        reqs.append(n)
+        return ratios, avails, reqs
+
     table_pattern = re.compile(r'<TABLE[^>]*>(.*?)</TABLE>', re.DOTALL | re.IGNORECASE)
-    # 지급여력 키워드 첫 위치에서 가까운 테이블 탐색
+
+    # ── 패턴1: TABLE 방식 (기존 로직) ─────────────────────────────────────
     idx = content.find('지급여력비율')
-    if idx < 0:
-        idx = content.find('지급여력금액')
-    if idx < 0:
-        idx = content.find('지급여력(A)')
+    if idx < 0: idx = content.find('지급여력금액')
+    if idx < 0: idx = content.find('지급여력(A)')
+    if idx < 0: idx = content.find('가용자본')
     search_start = max(0, idx - 2000) if idx >= 0 else 0
     search_end = min(len(content), idx + 50000) if idx >= 0 else len(content)
 
@@ -1751,68 +2470,28 @@ def _extract_kics(filepath):
         text = re.sub(r'\s+', ' ', text).strip()
         if not ('지급여력' in text[:500] or '가용자본' in text[:500]):
             continue
-        # 해설 테이블 제외
         if '개선권고' in text[:200] or '경영개선' in text[:200]:
             continue
+        ratios, avails, reqs = _parse_table_cells(text)
+        r = _build_result(ratios, avails, reqs)
+        if r:
+            return r
 
-        cells = text.split('|')
-        ratios, avails, reqs = [], [], []
-
-        def _parse_float(s):
-            try:
-                return float(s.replace(',', '').replace('(', '-').replace(')', '').strip())
-            except (ValueError, AttributeError):
-                return 0.0
-
-        for i, cell in enumerate(cells):
-            cs = cell.strip()
-            if '지급여력비율' in cs or 'A/B' in cs:
-                row = [c.strip() for c in cells[i+1:i+10]]
-                # 첫 셀이 '-'(산출중)이면 당기 미확정 → 이 테이블 건너뜀
-                if row and row[0] in ('-', '산출중', '미정'):
-                    break
-                for v in row:
-                    n = _parse_float(v)
-                    if 50 < n < 1000:
-                        ratios.append(n / 100)
-            elif '지급여력금액' in cs or '지급여력(A)' in cs or ('가용자본' in cs and '요구' not in cs):
-                row = [c.strip() for c in cells[i+1:i+8]]
-                for v in row:
-                    n = _parse_num(v)
-                    if n > 1000:
-                        avails.append(n)
-            elif '지급여력기준' in cs or '지급여력기준금액' in cs or '요구자본' in cs:
-                row = [c.strip() for c in cells[i+1:i+8]]
-                for v in row:
-                    n = _parse_num(v)
-                    if n > 1000:
-                        reqs.append(n)
-
-        if not ratios or not avails or not reqs:
+    # ── 패턴2: TD 방식 (한화생명 등 TABLE이 없는 경우) ──────────────────────
+    # 지급여력비율/가용자본 키워드가 TD 안에 있는 경우
+    for kw in ['지급여력(A)', '가용자본(A)', '지급여력금액(A)', '지급여력금액']:
+        idx2 = content.find(kw)
+        if idx2 < 0:
             continue
-
-        # 억원 단위 보정
-        def _fix_unit(lst):
-            return [v * 100 if v < 100000 else v for v in lst]
-        avails = _fix_unit(avails)
-        reqs = _fix_unit(reqs)
-
-        result = {}
-        # 사업보고서 당기(첫 번째 유효값) = 최종치 Col95-97
-        # 잠정치(Col92-94)는 1분기보고서 발표 시점에 공시되는 별도 값으로
-        # 사업보고서 테이블에서는 구분이 어려우므로 동일값 사용
-        if ratios:
-            result[95] = ratios[0]
-            result[92] = ratios[0]
-        if avails:
-            result[96] = avails[0]
-            result[93] = avails[0]
-        if reqs:
-            result[97] = reqs[0]
-            result[94] = reqs[0]
-
-        if result:
-            return result
+        # kw 위치에서 앞 200자 내 TR을 포함하는 구간 전체를 가상 TABLE로 처리
+        region = content[max(0, idx2 - 200):idx2 + 3000]
+        text = re.sub(r'<[^>]+>', '|', region)
+        text = re.sub(r'\|[\s|]+\|', '|', text)
+        text = re.sub(r'\s+', ' ', text).strip()
+        ratios, avails, reqs = _parse_table_cells(text)
+        r = _build_result(ratios, avails, reqs)
+        if r:
+            return r
 
     return {}
 
@@ -1829,13 +2508,26 @@ def _extract_csm_maturity(filepath, csm_total):
         return {}
 
     table_pattern = re.compile(r'<TABLE[^>]*>(.*?)</TABLE>', re.DOTALL | re.IGNORECASE)
+    # 테이블 앞 2000자 문맥에서 CSM 기간별 설명이 있는지 확인하는 키워드
+    CSM_MATURITY_CONTEXT_KWS = ('보험계약마진이 미래에', '예상 당기손익 인식기간', '기대수익인식금액',
+                                  '보험계약마진의 예상', '기간별 기대수익', '기간별 예상수익',
+                                  '기간별 예상상각', '보험계약마진의 향후')
     candidates = []
     for m in table_pattern.finditer(content):
         text = re.sub(r'<[^>]+>', '|', m.group(1))
         text = re.sub(r'\|[\s|]+\|', '|', text)
         text = re.sub(r'\s+', ' ', text).strip()
-        has_csm = '보험계약마진' in text[:400] or '기대수익' in text[:400]
-        has_time = any(k in text[:600] for k in ('1년이하', '1년 이하', '10년', '5년', '5~10'))
+        # 테이블 앞 문맥 확인
+        before = re.sub(r'<[^>]+>', ' ', content[max(0, m.start()-2000):m.start()])
+        before = re.sub(r'\s+', ' ', before)
+        context_has_csm = any(kw in before for kw in CSM_MATURITY_CONTEXT_KWS)
+        has_csm = '보험계약마진' in text[:800] or '기대수익' in text[:800] or context_has_csm
+        # has_time: 버킷 구조 키워드
+        has_time_strict = (any(k in text[:600] for k in ('1년이하', '1년 이하', '10년 초과', '5~10')) or
+                           bool(re.search(r'\d+년\s*이하|\d+년\s*초과|\d+년\s*이내', text[:600])))
+        # context가 있으면 단순 '1년', '2년' 패턴도 허용
+        has_time_loose = context_has_csm and bool(re.search(r'\|\s*\d+년\s*\|', text[:600]))
+        has_time = has_time_strict or has_time_loose
         if has_csm and has_time:
             candidates.append((m.start(), text))
 
@@ -1851,21 +2543,17 @@ def _extract_csm_maturity(filepath, csm_total):
             sections[-1].append(candidates[i])
     # Choose section whose total (or single-table total) is closest to csm_total
     def _quick_total(text):
-        cells = text.split('|')
-        for i, cell in enumerate(cells):
-            cs = cell.strip()
-            if ('원수보험계약' in cs or '보험계약마진' in cs) and '출재' not in cs and '재보험' not in cs:
-                nums = []
-                for v in cells[i+1:i+25]:
-                    vs = v.strip()
-                    n = _parse_num(vs)
-                    if n != 0:
-                        nums.append(n)
-                    elif vs and any(c.isalpha() for c in vs):
-                        break
-                if nums:
-                    return abs(nums[-1])  # abs for negative values
-        return 0
+        """테이블의 총합 추정: 모든 양수 값의 최대값 (전체 합계가 가장 큰 값)."""
+        all_nums = [abs(_parse_num(v)) for v in text.split('|') if _parse_num(v) > 0]
+        return max(all_nums) if all_nums else 0
+
+    # 연결/별도 section split
+    sections = [[candidates[0]]]
+    for i in range(1, len(candidates)):
+        if candidates[i][0] - candidates[i-1][0] > 500000:
+            sections.append([candidates[i]])
+        else:
+            sections[-1].append(candidates[i])
 
     # First try: find a single table whose total matches csm_total
     best_section = sections[-1]
@@ -1891,7 +2579,7 @@ def _extract_csm_maturity(filepath, csm_total):
         cells = text.split('|')
         for i, cell in enumerate(cells):
             cs = cell.strip()
-            is_total_row = (cs in ('원수보험계약', '합계', '소 계') or
+            is_total_row = (cs in ('원수보험계약', '합계', '합 계', '소 계', '발행한 보험계약') or
                             ('보험계약마진' in cs and '출재' not in cs and '재보험' not in cs))
             if not is_total_row:
                 continue
@@ -1929,75 +2617,145 @@ def _extract_csm_maturity(filepath, csm_total):
     year_buckets = re.findall(r'(\d+)년\s*(?:초과\s*)?(\d+)년\s*이내', header)
     fine_buckets = len(year_buckets) >= 8  # 동양/DB style: many fine buckets
 
+    # 헤더에 연도 범위 레이블이 있을 때만 패턴A 적용 (없으면 패턴B로)
+    has_bucket_header = bool(re.search(r'\d+년\s*이하|\d+년\s*초과|\d+년\s*이내|\d+년\s*[~～]\s*\d+년', header))
+
     # Find data row (원수보험계약 or 보험계약마진 합산 row)
-    for i, cell in enumerate(cells):
-        cs = cell.strip()
-        is_data_row = (cs in ('원수보험계약', '합 계', '보험계약마진') or
-                       ('보험계약마진' in cs and '출재' not in cs and '상각' not in cs and '재보험' not in cs))
-        if not is_data_row:
-            continue
-
-        row = []
-        for v in cells[i+1:i+25]:
-            vs = v.strip()
-            if any(c.isalpha() for c in vs) and '.' not in vs:
-                if row:
-                    break
+    if has_bucket_header:
+        for i, cell in enumerate(cells):
+            cs = cell.strip()
+            is_data_row = (cs in ('원수보험계약', '합 계', '합계', '보험계약마진', '발행한 보험계약') or
+                           ('보험계약마진' in cs and '출재' not in cs and '상각' not in cs and '재보험' not in cs))
+            if not is_data_row:
                 continue
-            n = _parse_num(vs)
-            row.append(n)
-            if len(row) >= 20:
-                break
 
-        real_nums = [n for n in row if n > 0]
-        if len(real_nums) < 4:
+            row = []
+            for v in cells[i+1:i+25]:
+                vs = v.strip()
+                if any(c.isalpha() for c in vs) and '.' not in vs:
+                    if row:
+                        break
+                    continue
+                n = _parse_num(vs)
+                row.append(n)
+                if len(row) >= 20:
+                    break
+
+            real_nums = [n for n in row if n > 0]
+            if len(real_nums) < 4:
+                continue
+
+            # 합계는 마지막 값
+            total = real_nums[-1]
+            buckets = real_nums[:-1]
+
+            if not buckets:
+                continue
+
+            nb = len(buckets)
+            if nb >= 10:
+                r = {83: buckets[0],
+                     84: sum(buckets[1:3]),
+                     85: sum(buckets[3:5]),
+                     86: sum(buckets[5:10]),
+                     87: sum(buckets[10:]),
+                     88: total}
+            elif nb == 9:
+                r = {83: buckets[0], 84: sum(buckets[1:3]), 85: sum(buckets[3:5]),
+                     86: buckets[5], 87: sum(buckets[6:]), 88: total}
+            elif nb == 8:
+                r = {83: buckets[0], 84: sum(buckets[1:3]), 85: sum(buckets[3:5]),
+                     86: buckets[5], 87: sum(buckets[6:]), 88: total}
+            elif nb == 7:
+                r = {83: buckets[0], 84: buckets[1]+buckets[2],
+                     85: buckets[3]+buckets[4], 86: buckets[5], 87: buckets[6], 88: total}
+            elif nb == 6:
+                r = {83: buckets[0], 84: buckets[1], 85: buckets[2],
+                     86: buckets[3], 87: buckets[4], 88: total}
+            elif nb == 5:
+                r = {83: buckets[0], 84: buckets[1], 85: buckets[2],
+                     86: buckets[3], 87: 0, 88: total}
+            elif nb == 4:
+                r = {83: buckets[0], 84: buckets[1], 85: buckets[2],
+                     86: buckets[3], 87: 0, 88: total}
+            else:
+                continue
+
+            # Verify consistency
+            s = r[83] + r[84] + r[85] + r[86] + r.get(87, 0)
+            if abs(s - total) < total * 0.02:
+                return r
+
+    # ── 패턴B: 연도×포트폴리오 행렬 구조 (KB생명 등)
+    # 패턴A에서 실패한 경우에만 시도
+    # 행: 1년, 2년, ..., n년, 합계 / 열: 포트폴리오1...포트폴리오N, 합계
+    # 마지막 열 = 발행한 보험계약 합계
+    all_candidates = [(pos, text) for sec in sections for pos, text in sec] if candidates else []
+    for pos, text in all_candidates:
+        cells = text.split('|')
+        # 연도 행 수집: '1년', '2년', '11년~15년' 등 레이블로 시작하는 행
+        year_rows = {}   # 단일 연도
+        band_rows = {}   # 범위 구간 (key: (start, end))
+        for i, c in enumerate(cells):
+            cs = c.strip()
+            # 단일 연도: '1년', '10년' 등
+            m_yr = re.match(r'^(\d+)년$', cs)
+            # 범위 구간: '11년~15년', '30년 이후' 등
+            m_band = re.match(r'^(\d+)년\s*[~～]\s*(\d+)년', cs)
+            m_after = re.match(r'^(\d+)년\s*이후', cs)
+            if not (m_yr or m_band or m_after):
+                continue
+            # 이 행의 숫자들 수집 (마지막 열이 발행한 보험계약 합계)
+            row_nums = []
+            for v in cells[i+1:i+30]:
+                vs = v.strip()
+                if re.match(r'^[\d,]+$', vs):
+                    row_nums.append(int(vs.replace(',', '')))
+                elif vs and any(ch.isalpha() for ch in vs) and row_nums:
+                    break
+            if not row_nums:
+                continue
+            val = row_nums[-1]
+            if m_yr:
+                year_rows[int(m_yr.group(1))] = val
+            elif m_band:
+                band_rows[(int(m_band.group(1)), int(m_band.group(2)))] = val
+            elif m_after:
+                band_rows[(int(m_after.group(1)), 999)] = val
+
+        if len(year_rows) + len(band_rows) < 5:
             continue
 
-        # 합계는 마지막 값
-        total = real_nums[-1]
-        buckets = real_nums[:-1]
+        # 단위 감지 (테이블 앞 문맥 포함)
+        unit_factor = 1
+        before_text = re.sub(r'<[^>]+>', ' ', content[max(0, pos-500):pos])
+        combined = text + before_text
+        if '단위 : 원' in combined or '단위:원' in combined or '(단위: 원)' in combined:
+            unit_factor = 1e-6
+        elif '단위 : 억원' in combined or '(단위: 억원)' in combined:
+            unit_factor = 100
 
-        if not buckets:
-            continue
+        # Col83~87 매핑
+        # year_rows로 1~10년 처리, band_rows로 범위 구간 처리
+        def _get_band_sum(start, end):
+            """start <= yr <= end인 year_rows 합산 + 해당 범위를 커버하는 band_rows 합산"""
+            s = sum(v for yr, v in year_rows.items() if start <= yr <= end)
+            s += sum(v for (a, b), v in band_rows.items() if a >= start and b <= end)
+            return s * unit_factor
 
-        nb = len(buckets)
-        if nb >= 10:
-            # Very fine annual buckets (동양: 1yr each up to 10yr, then 10+...)
-            r = {83: buckets[0],
-                 84: sum(buckets[1:3]),
-                 85: sum(buckets[3:5]),
-                 86: sum(buckets[5:10]),
-                 87: sum(buckets[10:]),
-                 88: total}
-        elif nb == 9:
-            # [1yr,1-2,2-3,3-4,4-5,5-10,10-20,20-30,30+] e.g. DB손보
-            r = {83: buckets[0], 84: sum(buckets[1:3]), 85: sum(buckets[3:5]),
-                 86: buckets[5], 87: sum(buckets[6:]), 88: total}
-        elif nb == 8:
-            # [1yr,1-2,2-3,3-4,4-5,5-10,10+,합계?] or similar
-            r = {83: buckets[0], 84: sum(buckets[1:3]), 85: sum(buckets[3:5]),
-                 86: buckets[5], 87: sum(buckets[6:]), 88: total}
-        elif nb == 7:
-            # [1yr, 1-2, 2-3, 3-4, 4-5, 5-10, 10+]
-            r = {83: buckets[0], 84: buckets[1]+buckets[2],
-                 85: buckets[3]+buckets[4], 86: buckets[5], 87: buckets[6], 88: total}
-        elif nb == 6:
-            # [1yr, 1-3, 3-5, 5-10, 10+]
-            r = {83: buckets[0], 84: buckets[1], 85: buckets[2],
-                 86: buckets[3], 87: buckets[4], 88: total}
-        elif nb == 5:
-            # [1yr, 1-3, 3-5, 5+, total→없음] e.g. 삼성화재
-            r = {83: buckets[0], 84: buckets[1], 85: buckets[2],
-                 86: buckets[3], 87: 0, 88: total}
-        elif nb == 4:
-            r = {83: buckets[0], 84: buckets[1], 85: buckets[2],
-                 86: buckets[3], 87: 0, 88: total}
-        else:
-            continue
+        # 11년 이상은 band_rows에서 합산
+        over10 = sum(band_rows.values()) * unit_factor
 
-        # Verify consistency
-        s = r[83] + r[84] + r[85] + r[86] + r.get(87, 0)
-        if abs(s - total) < total * 0.02:
+        r = {
+            83: year_rows.get(1, 0) * unit_factor,
+            84: (year_rows.get(2, 0) + year_rows.get(3, 0)) * unit_factor,
+            85: (year_rows.get(4, 0) + year_rows.get(5, 0)) * unit_factor,
+            86: sum(year_rows.get(y, 0) for y in range(6, 11)) * unit_factor,
+            87: over10,
+        }
+        total_est = sum(r.values())
+        if csm_total > 0 and abs(total_est - csm_total) < csm_total * 0.05:
+            r[88] = total_est
             return r
 
     return {}
@@ -2324,23 +3082,47 @@ def _extract_oci_detail(filepath, oci_total=None):
     except Exception:
         return {}
 
+    def _detect_oci_unit(raw_table_html, table_start_pos, fallback_range=3000):
+        """테이블 단위 감지. 반환: 1=백만원, 1e-6=원(/1e6→백만원), 100=억원(×100→백만원)."""
+        unit_m = re.search(r'단위\s*[:\s]\s*(억원|백만원|원)', raw_table_html)
+        if unit_m:
+            u = unit_m.group(1)
+            if '억원' in u:
+                return 100
+            if '원' in u and '백만' not in u:
+                return 1e-6
+            return 1
+        before = content[max(0, table_start_pos - fallback_range): table_start_pos]
+        before_clean = re.sub(r'<[^>]+>', ' ', before)
+        unit_m2 = re.search(r'단위\s*[:\s]\s*(억원|백만원|원)', before_clean)
+        if unit_m2:
+            u = unit_m2.group(1)
+            if '억원' in u:
+                return 100
+            if '원' in u and '백만' not in u:
+                return 1e-6
+        return 1
+
     table_pattern = re.compile(r'<TABLE[^>]*>(.*?)</TABLE>', re.DOTALL | re.IGNORECASE)
     candidates = []
     for m in table_pattern.finditer(content):
+        raw_html = m.group(0)
         text = re.sub(r'<[^>]+>', '|', m.group(1))
         text = re.sub(r'\|[\s|]+\|', '|', text)
         text = re.sub(r'\s+', ' ', text).strip()
         has_fvoci = any(kw in text[:800] for kw in
-                        ['공정가치측정금융자산평가손익', 'FVOCI', '공정가치금융자산평가'])
-        has_ins = ('보험계약' in text[:800] and
-                   ('금융손익' in text[:800] or '기타포괄' in text[:800]))
+                        ['공정가치측정금융자산평가손익', 'FVOCI', '공정가치금융자산평가',
+                         '공정가치측정유가증권평가손익', '공정가치측정금융상품평가손익'])
+        has_ins = (('보험계약' in text[:800] or '보험금융손익' in text[:800]) and
+                   ('금융손익' in text[:800] or '기타포괄' in text[:800] or '손익' in text[:800]))
         if has_fvoci and has_ins:
-            candidates.append((m.start(), text))
+            unit_factor = _detect_oci_unit(raw_html, m.start())
+            candidates.append((m.start(), text, unit_factor))
 
     if not candidates:
         return {}
 
-    # 섹션 분리 (연결/별도)
+    # 섹션 분리 (연결/별도): (pos, text, unit_factor) 튜플
     sections = [[candidates[0]]]
     for i in range(1, len(candidates)):
         if candidates[i][0] - candidates[i-1][0] > 500000:
@@ -2348,62 +3130,172 @@ def _extract_oci_detail(filepath, oci_total=None):
         else:
             sections[-1].append(candidates[i])
 
-    def _extract_from_table(text):
-        cells = text.split('|')
-        r = {}
-        COL_KW = {
-            25: (['공정가치측정금융자산평가손익'], ['보험']),  # (required, excluded)
-            26: (['보험계약', '금융손익'], ['재보험']),
-            27: (['재보험계약', '금융손익'], []),
-            28: (['현금흐름위험회피'], []),
-            29: (['재평가잉여금'], []),
-            30: (['확정급여'], []),
-        }
-        for i, cell in enumerate(cells):
-            cs = cell.strip()
-            for col, (req_kws, exc_kws) in COL_KW.items():
-                if col in r:
-                    continue
-                if all(kw in cs for kw in req_kws) and not any(kw in cs for kw in exc_kws):
-                    for v in cells[i + 1:i + 5]:
-                        vs = v.strip()
-                        if vs and not any(c.isalpha() for c in vs):
-                            n = _parse_num(vs)
-                            r[col] = n
-                            break
-        return r
+    COL_KW = {
+        25: [
+            (['공정가치측정금융자산평가손익'], ['보험']),
+            (['공정가치측정유가증권평가손익'], ['보험']),
+            (['공정가치측정금융상품평가손익'], ['보험']),
+        ],
+        26: [
+            (['보험계약', '금융손익'], ['재보험']),
+            (['보험금융손익'], ['재보험']),
+            (['순보험계약금융손익'], []),
+            (['보험계약부채순금융손익'], []),
+            (['보험계약자산', '순금융손익'], []),
+            (['보험계약손익'], ['재보험']),
+        ],
+        27: [
+            (['재보험계약', '금융손익'], []),
+            (['재보험금융손익'], []),
+            (['재보험계약자산', '순금융손익'], []),
+            (['재보험계약손익'], []),
+        ],
+        28: [
+            (['현금흐름위험회피'], []),
+            (['위험회피목적파생상품평가손익'], []),
+            (['위험회피목적'], ['재보험', '보험계약']),
+        ],
+        29: [
+            (['재평가잉여금'], []),
+            (['자산재평가손익'], []),
+        ],
+        30: [
+            (['확정급여'], []),
+        ],
+    }
 
-    def _get_section_oci_total(sec):
-        """Sum all OCI items from first table in section as estimate of OCI total."""
-        if not sec:
-            return None
-        pos, text = sec[0]
-        r = _extract_from_table(text)
-        if len(r) >= 2:
-            return sum(r.values())
+    def _label_matches(cs, patterns):
+        """셀 레이블이 COL_KW 패턴 중 하나에 매칭되면 해당 col 번호 반환, 없으면 None."""
+        for col, pats in patterns.items():
+            for req_kws, exc_kws in pats:
+                if all(kw in cs for kw in req_kws) and not any(kw in cs for kw in exc_kws):
+                    return col
         return None
 
-    # 각 섹션 중 OCI합계에 가장 가까운 섹션 선택, 그 섹션의 첫 번째 테이블 사용
+    def _parse_row_nums(cells, start, count=8):
+        """start 이후 최대 count개 셀에서 숫자 파싱. None=비숫자/빈칸."""
+        nums = []
+        for v in cells[start:start + count]:
+            vs = v.strip()
+            if not vs:
+                nums.append(None)
+            elif any(c.isalpha() for c in vs):
+                break  # 다음 레이블 시작 → 중단
+            else:
+                nums.append(_parse_num(vs))
+        return nums
+
+    def _extract_from_table(text, col_idx=None):
+        """
+        테이블에서 OCI 세부항목 추출.
+        col_idx: 각 행에서 사용할 숫자 컬럼 인덱스 (None이면 첫 번째 숫자 사용).
+        """
+        cells = text.split('|')
+        r = {}
+        for i, cell in enumerate(cells):
+            cs = cell.strip()
+            col = _label_matches(cs, COL_KW)
+            if col is None or col in r:
+                continue
+            nums = _parse_row_nums(cells, i + 1)
+            valid = [n for n in nums if n is not None]
+            if not valid:
+                continue
+            if col_idx is not None and col_idx < len(valid):
+                r[col] = valid[col_idx]
+            else:
+                r[col] = valid[0]
+        return r
+
+    def _find_best_col_idx(text, oci_total_mm, unit_factor):
+        """
+        자본변동표 스타일 테이블에서 기말잔액 컬럼 인덱스 탐색.
+        oci_total_mm: 백만원 단위 OCI 합계 (XBRL Col17 값)
+        unit_factor: 테이블 단위 (1=백만원, 1e-6=원/1e6, 100=억원)
+        합계행의 숫자들 중 oci_total_mm에 가장 가까운 값의 인덱스 반환.
+        """
+        cells = text.split('|')
+        # oci_total을 테이블 단위로 변환
+        # unit_factor=1e-6 → 테이블값이 원, oci_total은 백만원 → 테이블기준=oci_total*1e6
+        if unit_factor == 1e-6:
+            oci_target = oci_total_mm * 1e6
+        elif unit_factor == 100:
+            oci_target = oci_total_mm / 100
+        else:
+            oci_target = oci_total_mm
+        # 합계/기말 행 찾기
+        for i, cell in enumerate(cells):
+            cs = cell.strip()
+            if cs in ('합계', '소 계', '소계', '합 계', '기말') or cs.startswith('합'):
+                nums = _parse_row_nums(cells, i + 1, count=10)
+                valid = [(idx, n) for idx, n in enumerate(nums) if n is not None]
+                if not valid:
+                    continue
+                # oci_target에 가장 가까운 컬럼 인덱스
+                best_idx, best_err = 0, float('inf')
+                for idx, n in valid:
+                    err = abs(n - oci_target)
+                    if err < best_err:
+                        best_err = err
+                        best_idx = idx
+                # 오차가 oci_target의 2% 이내이면 신뢰
+                if oci_target != 0 and best_err < abs(oci_target) * 0.02:
+                    return best_idx
+        return None
+
+    def _get_section_best(sec, oci_total_hint):
+        """섹션의 첫 번째 테이블에서 OCI 총합을 추출 (컬럼 자동 탐색 포함).
+        반환: (sum_mm, col_idx, unit_factor)  sum_mm은 백만원 단위
+        """
+        if not sec:
+            return None, None, 1
+        pos, text, unit_factor = sec[0]
+        # 컬럼 인덱스 탐색 (oci_total_hint가 있으면)
+        col_idx = None
+        if oci_total_hint is not None:
+            col_idx = _find_best_col_idx(text, oci_total_hint, unit_factor)
+        r = _extract_from_table(text, col_idx=col_idx)
+        if len(r) >= 2:
+            # 테이블 단위를 백만원으로 환산
+            if unit_factor == 1e-6:
+                raw_sum = sum(r.values()) * 1e-6
+            elif unit_factor == 100:
+                raw_sum = sum(r.values()) * 100
+            else:
+                raw_sum = sum(r.values())
+            return raw_sum, col_idx, unit_factor
+        return None, col_idx, unit_factor
+
+    # 각 섹션 중 OCI합계에 가장 가까운 섹션 선택
     best_table_text = None
+    best_col_idx = None
+    best_unit_factor = 1
     best_err = float('inf')
 
     for sec in sections:
-        pos, text = sec[0]
+        pos, text, unit_factor = sec[0]
         if oci_total is not None:
-            t = _get_section_oci_total(sec)
+            t, cidx, uf = _get_section_best(sec, oci_total)
             if t is not None:
                 err = abs(t - oci_total)
                 if err < best_err:
                     best_err = err
                     best_table_text = text
+                    best_col_idx = cidx
+                    best_unit_factor = uf
         else:
-            best_table_text = sections[-1][0][1]
+            pos, best_table_text, best_unit_factor = sections[-1][0]
             break
 
     if best_table_text is None:
-        best_table_text = sections[-1][0][1]
+        pos, best_table_text, best_unit_factor = sections[-1][0]
 
-    result = _extract_from_table(best_table_text)
+    result = _extract_from_table(best_table_text, col_idx=best_col_idx)
+    # 단위 환산: 테이블이 원(1e-6) 또는 억원(100)이면 백만원으로 변환
+    if best_unit_factor == 1e-6:
+        result = {col: val * 1e-6 for col, val in result.items()}
+    elif best_unit_factor == 100:
+        result = {col: val * 100 for col, val in result.items()}
     return {col: val for col, val in result.items() if val != 0}
 
 
@@ -2417,7 +3309,22 @@ def parse_annual_doc_data(corp_name, csm_total=None, oci_total=None, year="2025"
 
     result = {}
 
-    kics = _extract_kics(doc_path)
+    # Col92~94: 사업보고서 (잠정치), Col95~97: 1분기보고서 (최종치)
+    kics_ann = _extract_kics(doc_path)
+    next_year = str(int(year) + 1)
+    q1_path = _get_q1_doc_path(corp_name, next_year)
+    kics_q1 = _extract_kics_from_q1(q1_path, target_year=year) if q1_path else {}
+    kics = dict(kics_ann)
+    if kics_q1:
+        # 1Q 최종치로 Col95~97 채움 (항상)
+        kics[95] = kics_q1[95]
+        kics[96] = kics_q1[96]
+        kics[97] = kics_q1[97]
+        if not kics_ann:
+            # 사업보고서 값 없으면 잠정치도 1Q로
+            kics[92] = kics_q1[95]
+            kics[93] = kics_q1[96]
+            kics[94] = kics_q1[97]
     result.update(kics)
 
     loss = _extract_loss_ratios(doc_path)
@@ -2812,12 +3719,20 @@ def extract_company_data(corp_name, year="2025", report_type="사업보고서", 
 
     # 보험계약부채 구성요소 (CSM/BEL/RA)
     components = parse_insurance_components(xbrl_path, year, ref_date=ref_date)
-    if components["CSM"] == 0 and components["BEL"] == 0 and corp_name in DOC_FALLBACK_CORP_CODES:
-        # XBRL에 component axis 없는 회사: 1Q document.xml fallback (사업보고서만)
-        if is_annual:
+    if components["CSM"] == 0 and components["BEL"] == 0:
+        if is_annual and corp_name in DOC_FALLBACK_CORP_CODES:
+            # XBRL에 component axis 없는 회사: 다음연도 1Q document.xml fallback (사업보고서)
             col13_val = result.get(13, 0)
             if col13_val > 0:
                 components = parse_insurance_components_from_doc(corp_name, col13_val, year)
+        elif not is_annual:
+            # 분기/반기 보고서: 해당 연도 1Q doc.xml에서 당기말 잔액 테이블 파싱
+            doc_path = _get_q1_doc_path(corp_name, year)
+            if doc_path:
+                bel_q, ra_q, csm_q = _extract_components_from_doc_q1(doc_path)
+                if bel_q is not None:
+                    components = {"BEL": bel_q * 1e6, "RA": (ra_q or 0) * 1e6, "CSM": csm_q * 1e6}
+                    print(f"    doc_q1 BEL/RA/CSM: {bel_q:.0f}/{ra_q:.0f}/{csm_q:.0f} 백만원")
     if components["CSM"] > 0:
         result[75] = components["CSM"] / 1e6
     if components["BEL"] > 0:
@@ -2949,6 +3864,17 @@ def extract_company_data(corp_name, year="2025", report_type="사업보고서", 
         if total != 0.0:
             result[col] = total / 1e6
 
+    # 패턴C direct: CarryingAmountAxis→ReportedAmountMember (DB손보/현대해상)
+    # Col25~30 중 패턴A/B로 못 채운 항목을 패턴C 결과로 보완
+    oci_cur_direct = oci_accum.get("cur_direct", {})
+    oci_prior_direct = oci_accum.get("prior_direct", {})
+    for col in (25, 26, 27, 28, 30):
+        if col not in result and col in oci_cur_direct:
+            result[col] = oci_cur_direct[col] / 1e6
+    # Col29 재평가잉여금: 전기말 direct 사용
+    if 29 not in result and 29 in oci_prior_direct:
+        result[29] = oci_prior_direct[29] / 1e6
+
     # Col24 = 기타포괄손익누계액 합계 (= Col17, AccumulatedOCI)
     if 17 in result:
         result[24] = result[17]
@@ -2989,6 +3915,22 @@ def extract_company_data(corp_name, year="2025", report_type="사업보고서", 
         result[88] = result[75]
 
     if is_annual:
+        # FISIS로 Col16/22/74/75/99 채움
+        # Col99(해약환급금)/Col22(운용자산): FISIS가 XBRL보다 신뢰 → 무조건 덮어씀
+        # Col16/74/75: XBRL 없을 때만
+        _fisis_always = {22, 99}
+        _fisis_fallback = {16, 74, 75}
+        _fisis_needed = _fisis_always | {c for c in _fisis_fallback if c not in result or result[c] == 0}
+        base_month = f"{year}{month}"
+        try:
+            from dart_api import fetch_fisis_balance
+            _fbal = fetch_fisis_balance(corp_name, base_month)
+            for col, val in _fbal.items():
+                if col in _fisis_needed and val and val != 0:
+                    result[col] = val
+        except Exception:
+            pass
+
         # 사업보고서 doc.xml: K-ICS, CSM기간별, 감응도, OCI 세부
         csm_total_for_doc = result.get(88, result.get(75, 0))
         oci_total_for_doc = result.get(17, result.get(24, None))
@@ -3001,6 +3943,31 @@ def extract_company_data(corp_name, year="2025", report_type="사업보고서", 
                 result[col] = val
             elif col in (25, 26, 27, 28, 29, 30) and result[col] != 0:
                 pass
+    else:
+        # 분기/반기 보고서: FISIS API로 K-ICS 및 재무 항목 조회
+        base_month = f"{year}{month}"
+        try:
+            from dart_api import fetch_fisis_kics, fetch_fisis_balance
+            fisis_kics = fetch_fisis_kics(corp_name, base_month)
+            for col, val in fisis_kics.items():
+                if col not in result or result[col] == 0:
+                    result[col] = val
+            fisis_bal = fetch_fisis_balance(corp_name, base_month)
+            # Col74/75(RA/CSM)/22(운용자산)/99(해약환급금): FISIS가 더 신뢰 → 무조건 덮어씀
+            # Col16: XBRL 없을 때만
+            _fisis_always_q = {22, 74, 75, 99}
+            for col, val in fisis_bal.items():
+                if col in _fisis_always_q:
+                    if val and val != 0:
+                        result[col] = val
+                elif col not in result or result[col] == 0:
+                    result[col] = val
+        except Exception as _e:
+            print(f"    FISIS 조회 실패 ({corp_name} {base_month}): {_e}")
+
+    # Col99 부호 보정: 해약환급금준비금은 항상 양수
+    if 99 in result and result[99] < 0:
+        result[99] = abs(result[99])
 
     # 계리적 가정 변경 민감도 분석 (Col146~158) — XBRL 기반, 분기/반기/사업보고서 모두 시도
     actuarial = parse_actuarial_sensitivity(xbrl_path, year, ref_date=ref_date, start_date=start_date)

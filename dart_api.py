@@ -491,6 +491,140 @@ def download_xbrl(rcept_no: str, corp_name: str, reprt_name: str, year: str, rep
     return save_path
 
 
+FISIS_API_KEY = "7b145068523cd3c2642e8b902a21999d"
+FISIS_BASE = "http://fisis.fss.or.kr/openapi"
+
+# 12개사 FISIS 코드 (finance_cd, lrgDiv)
+FISIS_CORP_CODES = {
+    "미래에셋생명": ("0010608", "H"),
+    "삼성생명":    ("0010595", "H"),
+    "교보생명":    ("0010597", "H"),
+    "한화생명":    ("0010593", "H"),
+    "신한라이프생명": ("0010599", "H"),
+    "동양생명":    ("0010622", "H"),
+    "KB생명":     ("0010616", "H"),
+    "삼성화재":    ("0010633", "I"),
+    "현대해상":    ("0010634", "I"),
+    "메리츠화재":  ("0010626", "I"),
+    "KB손해보험":  ("0010635", "I"),
+    "DB손해보험":  ("0010636", "I"),
+}
+
+
+def fetch_fisis_kics(corp_name: str, base_month: str) -> dict:
+    """FISIS API에서 K-ICS 지급여력비율/가용자본/요구자본 조회.
+    base_month: 'YYYYMM' (예: '202503')
+    반환: {95: 비율(소수), 96: 가용자본(백만원), 97: 요구자본(백만원)} 또는 {}
+    단위: FISIS는 원 단위 → /1e6 → 백만원
+    """
+    import requests as _req
+    entry = FISIS_CORP_CODES.get(corp_name)
+    if not entry:
+        return {}
+    finance_cd, lrg_div = entry
+    list_no = "SH021" if lrg_div == "H" else "SI021"
+    try:
+        r = _req.get(f"{FISIS_BASE}/statisticsInfoSearch.json", params={
+            "lang": "kr", "auth": FISIS_API_KEY,
+            "financeCd": finance_cd, "listNo": list_no,
+            "term": "Q", "startBaseMm": base_month, "endBaseMm": base_month,
+            "numOfRows": 10,
+        }, timeout=10)
+        items = r.json().get("result", {}).get("list", [])
+    except Exception:
+        return {}
+
+    ratio = avail = req = None
+    for it in items:
+        v = it.get("a", "")
+        if not v or v == "0":
+            continue
+        try:
+            fv = float(v)
+        except ValueError:
+            continue
+        if it["account_cd"] == "A" and fv > 0:
+            ratio = fv / 100  # % → 소수
+        elif it["account_cd"] == "B" and fv > 0:
+            avail = fv / 1e6  # 원 → 백만원
+        elif it["account_cd"] == "C" and fv > 0:
+            req = fv / 1e6
+
+    if ratio is None or avail is None or req is None:
+        return {}
+    return {95: ratio, 96: avail, 97: req}
+
+
+def fetch_fisis_balance(corp_name: str, base_month: str) -> dict:
+    """FISIS API에서 재무 항목 일괄 조회.
+    커버 항목:
+      Col16  신종자본증권       SH151/SI147 F3
+      Col22  운용자산          SH150/SI146 A1
+      Col73  BEL (생보만)      SH156/SI152 A111+A121+A3
+      Col74  RA               SH156/SI152 A112+A122
+      Col75  CSM              SH156/SI152 A113
+      Col99  해약환급금준비금    SH151/SI147 F46
+    반환: {col: value_백만원, ...} (값 없으면 해당 col 제외)
+    """
+    import requests as _req
+    entry = FISIS_CORP_CODES.get(corp_name)
+    if not entry:
+        return {}
+    fcd, lrg = entry
+    is_life = (lrg == "H")
+
+    def _fetch(list_no):
+        try:
+            r = _req.get(f"{FISIS_BASE}/statisticsInfoSearch.json", params={
+                "lang": "kr", "auth": FISIS_API_KEY,
+                "financeCd": fcd, "listNo": list_no,
+                "term": "Q", "startBaseMm": base_month, "endBaseMm": base_month,
+                "numOfRows": 200,
+            }, timeout=10)
+            return {it["account_cd"]: float(it["a"])
+                    for it in r.json().get("result", {}).get("list", [])
+                    if it.get("a") and it["a"] not in ("0", "")}
+        except Exception:
+            return {}
+
+    result = {}
+
+    # 책임준비금 (RA/CSM만 — BEL은 정의 불일치로 제외)
+    r_data = _fetch("SH156" if is_life else "SI152")
+    if r_data:
+        ra = r_data.get("A112", 0) + r_data.get("A122", 0)
+        csm = r_data.get("A113", 0)
+        if ra:  result[74] = ra / 1e6
+        if csm: result[75] = csm / 1e6
+
+    # 재무상태표 자산 (운용자산)
+    a_data = _fetch("SH150" if is_life else "SI146")
+    if a_data:
+        run = a_data.get("A1", 0)
+        if run:
+            if is_life:
+                # SH152(특별계정) 합산 여부를 논리적으로 판별:
+                # A1 + SH152_A ≈ SH150_A(총자산) 이면 A1이 일반계정만 → 합산
+                # 그렇지 않으면 A1이 이미 전체 포함 → 그대로 사용
+                total = a_data.get("A", 0)
+                if total > 0:
+                    sa_data = _fetch("SH152")
+                    sa_total = sa_data.get("A", 0)
+                    if sa_total > 0 and abs(run + sa_total - total) / total < 0.015:
+                        run += sa_total
+            result[22] = run / 1e6
+
+    # 재무상태표 부채자본 (신종자본증권, 해약환급금)
+    b_data = _fetch("SH151" if is_life else "SI147")
+    if b_data:
+        hyb = b_data.get("F3", 0)
+        hyk = b_data.get("F46", 0)
+        if hyb: result[16] = hyb / 1e6
+        if hyk: result[99] = hyk / 1e6
+
+    return result
+
+
 if __name__ == "__main__":
     import argparse
 

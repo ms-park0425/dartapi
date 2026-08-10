@@ -1,7 +1,7 @@
 # 동업사 공시비교 DATA 시트 자동화
 
 DART 전자공시시스템에서 12개 보험사의 XBRL 파일과 원문 XML(document.xml)을 받아  
-`DATA_작업_빈칸.xlsx`의 DATA 시트를 자동으로 채웁니다.
+금융감독원 FISIS API와 연계하여 `DATA_작업_빈칸.xlsx`의 DATA 시트를 자동으로 채웁니다.
 
 ## 실행 방법
 
@@ -11,7 +11,9 @@ python parse_annual.py --period all
 
 # 특정 기간만
 python parse_annual.py --period 2512    # 2025년 12월 사업보고서
+python parse_annual.py --period 2509    # 2025년 9월 3분기보고서
 python parse_annual.py --period 2506    # 2025년 6월 반기보고서
+python parse_annual.py --period 2503    # 2025년 3월 1분기보고서
 python parse_annual.py --period 2412    # 2024년 12월 사업보고서
 ```
 
@@ -20,246 +22,22 @@ python parse_annual.py --period 2412    # 2024년 12월 사업보고서
 
 ---
 
-## XBRL Taxonomy
+## 데이터 소스
 
-`data/taxonomy.csv` — XBRL 태그 ID와 한글명 매핑표. 각 회사 XBRL 다운로드 시 포함된 `*_lab-ko.xml`에서 자동 추출됩니다.
+| 소스 | 설명 | 주요 항목 |
+|------|------|---------|
+| **XBRL** | DART `fnlttXbrl.xml` API — 별도 재무제표 기준 `.xbrl` 파일 | BS·PL·CSM변동·OCI변동·감응도 |
+| **원문XML** | DART `document.xml` API — 보고서 원문 HTML 테이블 파싱 | K-ICS·운용자산·CSM기간별·손해율 |
+| **FISIS API** | 금융감독원 금융통계정보시스템 Open API | RA·CSM잔액·해약환급금·운용자산·신종자본증권·킥스(분기) |
 
-| 분류 | prefix | 개수 | 설명 |
-|------|--------|-----:|------|
-| IFRS 표준 | `ifrs-full_` | 1,562 | IASB가 정의한 국제 표준 태그 |
-| DART 한국 추가 | `dart_` | 967 | 금융감독원이 보험업 특화로 추가 정의 |
-| 회사별 커스텀 | `entity{corp_code}_` | 10,844 | 각 회사가 자체 정의한 태그 (비표준) |
+### FISIS API 키 설정
 
-> **표준 taxonomy**는 `ifrs-full_`과 `dart_` prefix인 2,529개입니다.  
-> `entity` prefix 태그는 특정 회사만 사용하는 커스텀 태그로, 다른 회사/연도에 적용되지 않습니다.
-
-**주요 활용 태그 예시:**
-
-| 항목 | 태그 |
-|------|------|
-| 총자산 | `ifrs-full_Assets` |
-| 보험계약부채 | `ifrs-full_InsuranceContractsIssuedThatAreLiabilities` |
-| 보험손익 | `ifrs-full_InsuranceServiceResult` |
-| 당기순이익 | `ifrs-full_ProfitLoss` |
-| 보험금융손익 | `dart_InsuranceFinanceIncomeFromInsuranceContractsIssuedRecognisedInProfitOrLoss` |
-| 신종자본증권 | `dart_HybridBonds` |
-| 보험계약마진(CSM) | `dart_ContractualServiceMargin` 등 |
-
----
-
-## 왜 회사마다 결과가 다른가
-
-자동화가 안 되거나 회사마다 결과가 다른 이유는 크게 두 가지입니다.
-
----
-
-### 이유 1 — XBRL 안에서 같은 값을 저장하는 구조가 회사마다 다르다
-
-XBRL은 숫자 하나를 저장할 때 **"이 숫자가 어떤 조건의 값인가"를 함께 태깅**합니다.  
-엑셀 피벗테이블에서 필터를 걸어 특정 셀 값을 뽑는 것과 같고, 그 필터 개수를 **dim**이라고 부릅니다.
-
-IFRS17은 어떤 필터를 얼마나 걸지 회사 재량이라, **같은 항목인데 회사마다 필터 구조가 다릅니다.**
-
-#### DATA 시트 Col75 (CSM 잔액) — 같은 숫자를 찾는 필터가 회사마다 다르다
-
-**삼성생명 — 2-dim: 필터 2개, 값 하나로 바로 저장**
-
-```
-필터① 재무제표 종류  = 별도 (SeparateMember)
-필터② 보험계약 구분  = 발행계약 전체 (InsuranceContractsIssuedMember)
-      + 태그 자체가 ContractualServiceMargin → CSM임을 의미
-```
-
-실제 XBRL:
-```xml
-<ifrs-full:ContractualServiceMargin
-  contextRef="CFY2025eFY_..._SeparateMember_..._InsuranceContractsIssuedMember"
-  decimals="-6">13217874000000</ifrs-full:ContractualServiceMargin>
-```
-contextRef가 가리키는 context 정의:
-```xml
-<xbrldi:explicitMember dimension="ConsolidatedAndSeparateFinancialStatementsAxis">ifrs-full:SeparateMember</xbrldi:explicitMember>
-<xbrldi:explicitMember dimension="DisaggregationOfInsuranceContractsAxis">ifrs-full:InsuranceContractsIssuedMember</xbrldi:explicitMember>
-```
-→ **13,217,874,000,000원 = 13,217,874 백만원** ✅
-
----
-
-**현대해상 — 5-dim: 필터 5개, 값 하나로 저장 (내부적으로는 6-dim 세부 내역도 병존)**
-
-```
-필터① 재무제표 종류  = 별도
-필터② 보험계약 구분  = 발행계약 전체
-필터③ 회계모형       = PAA 미적용 계약
-필터④ 잔여보장       = LRC (잔여보장부채)
-필터⑤ 구성요소       = CSM
-```
-
-실제 XBRL (5-dim 합계 태그):
-```xml
-<ifrs-full:InsuranceContractsLiabilityAsset
-  contextRef="CFY2025eFY_..._SeparateMember_..._InsuranceContractsIssuedMember_..._InsuranceContractsOtherThanThoseToWhichPremiumAllocationApproachHasBeenAppliedMember_..._LiabilitiesForRemainingCoverageMember_..._ContractualServiceMarginMember"
-  decimals="0">8977842069322</ifrs-full:InsuranceContractsLiabilityAsset>
-```
-contextRef가 가리키는 context 정의:
-```xml
-<xbrldi:explicitMember dimension="ConsolidatedAndSeparateFinancialStatementsAxis">ifrs-full:SeparateMember</xbrldi:explicitMember>
-<xbrldi:explicitMember dimension="DisaggregationOfInsuranceContractsAxis">ifrs-full:InsuranceContractsIssuedMember</xbrldi:explicitMember>
-<xbrldi:explicitMember dimension="InsuranceContractsAxis">ifrs-full:InsuranceContractsOtherThanThoseToWhichPremiumAllocationApproachHasBeenAppliedMember</xbrldi:explicitMember>
-<xbrldi:explicitMember dimension="InsuranceContractsByRemainingCoverageAndIncurredClaimsAxis">dart:LiabilitiesForRemainingCoverageMember</xbrldi:explicitMember>
-<xbrldi:explicitMember dimension="InsuranceContractsByComponentsAxis">ifrs-full:ContractualServiceMarginMember</xbrldi:explicitMember>
-```
-→ **8,977,842,069,322원 = 8,977,842 백만원** ✅
-
-같은 파일 안에 6-dim 세부 내역도 함께 존재 (필터⑤ 뒤에 보험종류 필터가 추가됨):
-```
-장기보험 (비배당) → 8,868,911,078,887 원
-장기보험 (배당)   →   108,930,990,435 원
-일반보험          →               0 원
-자동차보험        →               0 원
-                 ───────────────────────
-                   8,977,842,069,322 원  ← 5-dim 합계와 일치
-```
-
-스크립트는 5-dim 합계 태그를 직접 읽고, 없는 경우 6-dim 세부를 합산하는 방식으로 동작합니다.
-
-#### 스크립트가 어떻게 올바른 context를 찾는가
-
-XBRL 파일 안에는 context id가 수백~수천 개 있습니다. id 문자열을 직접 매칭하는 게 아니라,  
-각 context 안의 dimension 목록을 읽어 조건을 확인합니다.
+`dart_api.py`의 `FISIS_API_KEY` 변수에 인증키를 입력합니다.  
+키 발급: https://fisis.fss.or.kr/page/api-key.jsp (무료, 이메일 수령)
 
 ```python
-for ctx in root.findall("context"):
-    dims = {}
-    for m in ctx.iter("explicitMember"):
-        dims[m.get("dimension")] = m.text   # 필터 목록 수집
-
-    # 원하는 조건인지 확인
-    if dims.get("ConsolidatedAndSeparateFinancialStatementsAxis") != "SeparateMember":
-        continue
-    if dims.get("DisaggregationOfInsuranceContractsAxis") != "InsuranceContractsIssuedMember":
-        continue
-    # → 이 context id가 우리가 원하는 것 → 이 id를 가진 값 태그를 찾아 읽음
+FISIS_API_KEY = "your_api_key_here"
 ```
-
-회사를 미리 식별하는 게 아니라 **조건 자체를 순서대로 시도**합니다.  
-각 컬럼마다 "이 조건 → 안 되면 이 조건 → 그것도 안 되면 이 조건" 순서로 패턴이 정의되어 있고,  
-처음 매칭되는 패턴의 값을 사용합니다.
-
-```python
-def parse_insurance_components(root):
-    # 패턴A 먼저 시도 (삼성생명 2-dim: DisaggregationAxis에 BEL/RA/CSM 직접)
-    for ctx in ...:
-        if dims["DisaggregationAxis"] == "EstimatesOfPresentValueOfFutureCashFlowsMember":
-            bel = 이 context의 값
-            return bel          # 찾으면 바로 반환
-
-    # 패턴A 실패 → 패턴B 시도 (교보 등 3-dim: IssuedMember + ComponentsAxis)
-    for ctx in ...:
-        if dims["DisaggregationAxis"] == "InsuranceContractsIssuedMember"
-        and dims["ComponentsAxis"] == "EstimatesOfPresentValueOfFutureCashFlowsMember":
-            bel = 이 context의 값
-            return bel
-
-    # 패턴B도 실패 → 패턴C 시도 (현대해상 등 5~6-dim: 보험종류별 합산)
-    for ctx in ...:
-        if dims["InsuranceContractsAxis"] == "InsuranceContractsOtherThan..."
-        and dims["ComponentsAxis"] == "EstimatesOfPresentValueOfFutureCashFlowsMember":
-            bel += 이 context의 값     # 여러 개 합산
-    return bel
-```
-
-이 구조 덕분에 새 회사가 추가되거나 구조가 바뀌어도 기존 패턴에 매칭되면 자동 처리되고,  
-안 되면 새 패턴만 추가하면 됩니다.
-
-#### 회사별 패턴은 연도가 바뀌어도 대부분 유지된다
-
-회사가 한 번 2-dim으로 신고하기 시작하면 다음 해에도 동일한 구조를 씁니다.  
-그래서 패턴을 한 번 만들어두면 `--period all`로 2312~2512 전 기간을 한 번에 처리할 수 있습니다.
-
-다만 예외가 있습니다:
-
-- **IFRS17 초기(2312)**: 도입 첫 해라 태그 구조가 정착되지 않아 회사마다 실험적으로 다른 방식을 썼다가 이후 안정화된 케이스가 있음. 2512 기준으로 만든 패턴이 2312에 안 맞는 경우가 생겨 **2312 OK율이 42%로 낮은 주요 원인** 중 하나.
-- **분기/반기 보고서**: 사업보고서보다 XBRL에 포함된 태그 종류가 적어 CSM변동·K-ICS·감응도 등 사업보고서 전용 항목은 아예 없음. 패턴이 맞아도 태그 자체가 없으면 MISS.
-- **회사가 공시 방식을 변경**: 드물지만 연도 사이에 axis 구조를 바꾸는 경우가 있어 그 연도만 새 패턴 추가 필요.
-
-#### OCI 세부잔액 (Col25~30) — 3번째 axis 이름이 회사마다 달라서 MISS 발생
-
-| 회사 | 구조 | 방식 |
-|------|------|------|
-| 삼성생명 | **2-dim** | `ComponentsOfEquityAxis`에 FVOCI 잔액 멤버를 **직접** 넣음 |
-| 미래에셋·교보 등 | **3-dim** | `ComponentsOfEquityAxis = OCI누계액전체` 고정 + **회사 자체 정의 3번째 axis**로 세부 구분 |
-
-미래에셋 등은 3번째 axis 이름에 회사 고유 코드(`entity00112332:ChangesInAccumulatedOCI...`)가 들어가 회사마다 달라집니다.  
-표준 패턴으로 일괄 매핑이 안 되기 때문에 일부 회사 Col25~30이 MISS가 됩니다.
-
-#### CSM 변동표 (Col76~80) — dim 수에 따라 탐색 방식이 달라짐
-
-| 회사 | Dim 수 | 특이사항 |
-|------|--------|---------|
-| 삼성생명 | **3-dim** | `Separate` + `IssuedMember` + `TypesOfContractsAxis`(건강/생명 등) |
-| 미래에셋 | **4+5-dim 병행** | 신계약·상각은 4-dim, 전환방식(MRA/FVA)별 조정은 5-dim에 따로 있음 |
-| 삼성화재 | **6-dim** | 위에 `RemainingCoverageAxis` + `InputsToMethodsAxis(LossComponent)` 추가 |
-
-미래에셋은 같은 보고서 안에서 태그마다 4-dim과 5-dim에 나뉘어 저장되어 있어 두 패턴을 따로 탐색한 뒤 합산합니다.
-
----
-
-### 이유 2 — 보고서 원문 XML에서 테이블 자체가 없거나 위치·형태가 다르다
-
-XBRL이 아닌 보고서 원문(document.xml)에서 파싱하는 항목은 회사가 해당 테이블을 아예 공시하지 않거나  
-다른 형태로 작성하면 추출이 불가능합니다.
-
-#### 운용자산 (Col22·23): 교보생명 ✅ vs 삼성화재 ❌
-
-**교보생명** — "II. 사업의 내용 > 영업의 현황"에 운용자산 테이블 존재:
-
-```xml
-<TD ROWSPAN="10">운용자산</TD>
-<TD>현ㆍ예금</TD>  <TD ALIGN="RIGHT">3,358,380</TD>
-...
-<TD>운용자산(B)</TD>  <TD ALIGN="RIGHT">107,254,263</TD>
-```
-
-**삼성화재** — 해당 테이블 자체가 없음:
-
-```xml
-<!-- "운용자산" 검색 결과: 퇴직연금 관련 텍스트 2건뿐 -->
-<TD>퇴직연금운용자산</TD>
-```
-
-손해보험사는 보험업 감독규정상 생명보험사에게 요구하는 자산종류별 운용현황표 공시의무가 없어 테이블 자체가 없습니다.
-
-#### K-ICS 지급여력비율 (Col92~94): 신한라이프 ✅ vs 삼성생명 ❌
-
-**신한라이프** — "5. 재무건전성" 섹션에 수치 테이블 존재:
-
-```xml
-<TR><TD>지급여력(A)</TD>      <TD ALIGN="RIGHT">98,765</TD></TR>
-<TR><TD>지급여력기준(B)</TD>   <TD ALIGN="RIGHT">47,934</TD></TR>
-<TR><TD>지급여력비율(A/B)</TD> <TD ALIGN="RIGHT">206.0</TD></TR>
-```
-
-**삼성생명** — 수치 테이블 없이 텍스트만 존재:
-
-```xml
-<P>연결실체는 감독기관에서 규정한 K-ICS 지급여력비율을 준수하고 있습니다.</P>
-```
-
-삼성생명은 실제 수치를 테이블로 공시하지 않아 파싱할 값이 없습니다.
-
-#### CSM 기간별 (Col83~87): 교보생명 ✅ vs 신한라이프 ❌
-
-**교보생명** — 1년 단위로 세분화된 테이블 존재:
-
-```xml
-<TH>1년 이하</TH><TH>1년~2년</TH>...<TH>10년 초과</TH><TH>합계</TH>
-<TD ALIGN="RIGHT">572,633</TD><TD ALIGN="RIGHT">501,445</TD>...
-<TD ALIGN="RIGHT">6,538,630</TD>
-```
-
-**신한라이프** — 사업보고서에 해당 테이블 없음.  
-공시 의무 항목이 아니라 작성 여부 자체가 회사 재량이라 자동화 불가.
 
 ---
 
@@ -268,53 +46,33 @@ XBRL이 아닌 보고서 원문(document.xml)에서 파싱하는 항목은 회�
 정답 데이터(`202512_동업사 공시비교_DATA_작업_260320.xlsx`)와 비교한 결과입니다.  
 오차 허용 기준: **0.1% 이내** = OK, 초과 = FAIL, 미추출 = MISS
 
-| 기간 | 보고서 종류 | OK | FAIL | MISS | 비교 대상 | **OK율** |
-|------|-----------|---:|-----:|-----:|----------:|--------:|
-| 2312 | 2023년 사업보고서 | 411 | 193 | 388 | 992 | **41%** |
-| 2412 | 2024년 사업보고서 | 660 | 68 | 380 | 1,108 | **60%** |
-| 2503 | 2025년 1분기 | 511 | 22 | 397 | 930 | **55%** |
-| 2506 | 2025년 반기 | 541 | 70 | 345 | 956 | **57%** |
-| 2509 | 2025년 3분기 | 604 | 26 | 322 | 952 | **63%** |
-| 2512 | 2025년 사업보고서 | 888 | 42 | 210 | 1,140 | **78%** |
+| 기간 | 보고서 종류 | OK | FAIL | MISS | 비교대상 | **OK율** |
+|------|-----------|---:|-----:|-----:|--------:|--------:|
+| 2212 | 2022년 사업보고서 | 0 | 0 | 144 | 144 | **0%** |
+| 2312 | 2023년 사업보고서 | 477 | 213 | 275 | 965 | **49%** |
+| 2412 | 2024년 사업보고서 | 742 | 80 | 286 | 1,108 | **67%** |
+| 2503 | 2025년 1분기 | 573 | 60 | 297 | 930 | **62%** |
+| 2506 | 2025년 반기 | 607 | 93 | 256 | 956 | **64%** |
+| 2509 | 2025년 3분기 | 673 | 49 | 230 | 952 | **71%** |
+| 2512 | 2025년 사업보고서 | 942 | 34 | 137 | 1,113 | **85%** |
 
 **기간별 특이사항**
 
-- **2312 (42%)**: IFRS17 도입 첫 해라 XBRL 태그 구조가 정착되지 않아 패턴 불일치 다수. 전기말(2022년말) XBRL 미제공으로 이전기 비교수치 불일치.
-- **2412 (59%)**: BS·PL은 잘 추출되지만 BEL·CSM 등 보험계약 구성요소가 MISS. 원인은 아래 참고.
-- **2503·2506·2509 (77%)**: 남은 MISS는 CSM 기간별·K-ICS 최종치·예실차 등 원문XML 파싱이 필요한 항목.
-- **2512 (76%)**: 사업보고서 전용 항목까지 포함. 주요 MISS는 예실차 세부·일부 CSM기간별·OCI 세부잔액.
+- **2212 (0%)**: IFRS17 도입 이전(IFRS4 기준)으로 태그 체계가 완전히 달라 현재 파싱 패턴 미지원. 수동 입력 필요.
+- **2312 (49%)**: IFRS17 도입 첫 해로 XBRL 태그 구조가 정착되지 않아 패턴 불일치 다수. 전기말(2022년말) XBRL 미제공으로 이전기 비교수치 불일치.
+- **2412 (67%)**: XBRL에 BEL/RA/CSM 구성요소 태그가 없는 회사 다수 (2025년부터 확대 공시). FISIS로 보완.
+- **2503·2506·2509 (62~71%)**: 분기/반기는 사업보고서 전용 항목(CSM변동·감응도·CSM기간별) 정답 자체가 없어 비교 대상이 적음. K-ICS는 FISIS API로 채움.
+- **2512 (85%)**: 사업보고서 전용 항목 포함 최고 정확도. 주요 MISS: 예실차 세부(Col111~117)·일부 CSM기간별(Col83~87)·OCI누계 세부(Col26~30 일부).
 
-#### 2412 BEL/CSM MISS 원인 — 회사들이 2025년에 XBRL 공시 수준을 크게 확대
-
-삼성생명 기준으로 연도별 XBRL 파일의 태그 수:
-
-| 연도 | 태그 수 | BEL/RA/CSM 분리 태그 |
-|------|--------|---------------------|
-| 2024 | 245개 | **없음** |
-| 2025 | 988개 | **있음** |
-
-2024년까지는 보험계약부채를 BEL/RA/CSM으로 나눠서 XBRL에 태깅하지 않고 총액만 신고하다가,  
-2025년 사업보고서부터 구성요소별로 분리 태깅하기 시작했습니다.  
-스크립트 패턴은 2512 기준으로 만들어져 있어서, 해당 태그가 없는 2412 이전에는 XBRL에서 뽑지 못하고 MISS가 됩니다.
-
-이 케이스의 2412 값은 1분기 doc.xml을 보유한 일부 회사(교보·신한라이프·KB생명 등)만 뽑히고  
-나머지는 수동 입력이 필요합니다.
-
-> **Excel 주황색 셀**: 정답과 0.1% 이상 차이나는 셀 (FAIL). 빈 셀은 미추출(MISS).
+> **2412 BEL/CSM MISS 원인**: 삼성생명 기준 2024년 XBRL 태그 수 245개(BEL/RA/CSM 분리 없음) → 2025년 988개(구성요소 분리 태그 신설). 2025년부터 대부분 회사가 XBRL 공시 수준을 크게 확대해 해결됨.
 
 ---
 
 ## 컬럼별 자동화 현황
 
 > **기준: 2512 (2025년 12월 사업보고서), 12개사**  
-> 분기/반기 보고서(2503·2506·2509)는 BS·PL 기본 항목 위주로 추출되며, 사업보고서 전용 항목(CSM변동·K-ICS·예실차 등)은 연간 보고서에서만 추출됩니다.  
-> 전년도(2312·2412)는 전체적으로 유사하나, 일부 XBRL 태그 구조 차이로 정확도가 낮을 수 있습니다.
-
-아래에서 **소스**는 데이터를 어디서 가져오는지를 나타냅니다.
-
-- **XBRL**: `fnlttXbrl.xml` API로 받은 `.xbrl` 파일 (별도 재무제표 기준)
-- **원문XML**: `document.xml` API로 받은 보고서 원문 HTML 테이블 파싱
-- **계산**: 다른 컬럼 값으로부터 파생
+> 분기/반기(2503·2506·2509)는 BS·PL 기본 항목 + FISIS 연계 항목 위주.  
+> 사업보고서 전용(CSM변동·감응도·CSM기간별·손해율)은 연간에서만 추출.
 
 ---
 
@@ -327,12 +85,12 @@ XBRL이 아닌 보고서 원문(document.xml)에서 파싱하는 항목은 회�
 | 6 | FVOCI | XBRL | `ifrs-full_FinancialAssetsAtFairValueThroughOtherComprehensiveIncome` | ✅ 12/12 |
 | 7 | AC | XBRL | `ifrs-full_FinancialAssetsAtAmortisedCost` | ✅ 12/12 |
 | 8 | 종속·관계기업 | XBRL | `ifrs-full_InvestmentsInSubsidiariesJointVenturesAndAssociates` | ✅ 11/11 |
-| 9~11 | 총자산대비비중 | 계산 | Col5~7 / Col4 | ✅ 계산 정확. 정답 Excel의 KB손보 값이 이전 분기 수치를 그대로 복사한 것으로 보임 |
+| 9~11 | 총자산대비비중 | 계산 | Col5~7 / Col4 | ✅ |
 | 12 | 부채 | XBRL | `ifrs-full_Liabilities` | ✅ 12/12 |
 | 13 | 보험계약부채 | XBRL | `ifrs-full_InsuranceContractsIssuedThatAreLiabilities` | ✅ 12/12 |
 | 14 | 자본(신종제외) | 계산 | Col15 − Col16 | ✅ 12/12 |
 | 15 | 자본 | XBRL | `ifrs-full_Equity` | ✅ 12/12 |
-| 16 | 신종자본증권 | XBRL | `dart_HybridBonds` | ✅ 5/5 (발행 회사만) |
+| 16 | 신종자본증권 | XBRL → **FISIS** | `dart_HybridBonds`; fallback: FISIS SH151/SI147 F3 | ✅ 5/5 (발행 회사만) |
 | 17 | OCI누계액 | XBRL | `ifrs-full_AccumulatedOtherComprehensiveIncome` | ✅ 12/12 |
 | 18 | 이익잉여금 | XBRL | `ifrs-full_RetainedEarnings` | ✅ 12/12 |
 
@@ -342,14 +100,12 @@ XBRL이 아닌 보고서 원문(document.xml)에서 파싱하는 항목은 회�
 
 | Col | 항목 | 소스 | 태그 / 방법 | 결과 |
 |-----|------|------|-----------|------|
-| 21 | 자산운용 총자산 | 원문XML | 지급여력 테이블의 `총 자 산(A)` | ⚠️ 삼성 MISS (doc.xml에 없음) |
-| 22 | 운용자산 | 원문XML | 운용자산/자산운용률 테이블 `운용자산(B)` | ⚠️ 삼성·삼성화재·현대해상·KB손보 MISS |
-| 23 | 자산운용률 | 원문XML | 운용자산/자산운용률 테이블 `자산운용률(B/A)` | ⚠️ 삼성·삼성화재·현대해상·KB손보 MISS |
+| 21 | 자산운용 총자산 | 원문XML → XBRL | 운용자산 테이블 `총 자 산(A)`; fallback: Col4(총자산) | ⚠️ 일부 회사 MISS |
+| 22 | 운용자산 | **FISIS** → 원문XML | FISIS SH150/SI146 A1 (일반계정+특별계정 자동 판별); fallback: 원문XML 운용자산 테이블 | ✅ 11/12 (삼성화재 소오차) |
+| 23 | 자산운용률 | 원문XML | 운용자산 테이블 `자산운용률(B/A)` | ⚠️ 일부 회사 MISS |
 
-> **정의**: 보험업감독업무시행세칙 기준 — 특별계정자산 제외 총자산(Col21), 비운용자산 제외 운용자산(Col22)  
-> **MISS 이유**: 삼성생명·삼성화재·현대해상·KB손보는 사업보고서 원문 XML에 해당 테이블 미포함.  
-> XBRL 총자산에는 특별계정자산이 포함되어 있어 단순 태그 매핑으로는 추출 불가.  
-> → 감독원 업무보고서 또는 회사 IR 자료에서 수동 확인 필요.
+> FISIS 운용자산(SH150 A1)은 일반계정 기준. 특별계정 별도 집계 회사(한화 등)는 SH152와 합산 여부를 자동 판별합니다.  
+> `|A1 + 특별계정| ≈ 총자산(1.5% 이내)`이면 합산, 그렇지 않으면 A1만 사용.
 
 ---
 
@@ -358,16 +114,12 @@ XBRL이 아닌 보고서 원문(document.xml)에서 파싱하는 항목은 회�
 | Col | 항목 | 소스 | 태그 / 방법 | 결과 |
 |-----|------|------|-----------|------|
 | 24 | OCI 합계 | 계산 | = Col17 | ✅ 12/12 |
-| 25 | FVOCI 평가손익 | XBRL→원문XML | XBRL 재무상태표 기타포괄손익 항목 중 FVOCI 금융자산 평가손익 잔액. fallback: 사업보고서 자본 세부 테이블의 `공정가치측정금융자산평가손익` 행 | ⚠️ 신한라이프·KB라이프·DB손보 MISS |
-| 26 | 보험계약 금융손익 | XBRL→원문XML | XBRL 재무상태표 보험계약 관련 OCI 잔액. fallback: 자본 세부 테이블의 `보험계약 관련 금융손익` 행 | ⚠️ 5개사 MISS |
-| 27 | 재보험계약 금융손익 | XBRL→원문XML | XBRL 재무상태표 재보험계약 관련 OCI 잔액. fallback: 자본 세부 테이블의 `재보험계약 관련 금융손익` 행 | ⚠️ 8개사 MISS |
-| 28 | 현금흐름위험회피 | XBRL→원문XML | XBRL 재무상태표 현금흐름위험회피 파생상품 OCI 잔액. fallback: 자본 세부 테이블의 `현금흐름위험회피` 행 | ⚠️ 6개사 MISS |
-| 29 | 재평가잉여금 | XBRL→원문XML | XBRL 재무상태표 **전기말** 재평가잉여금 잔액. fallback: 자본 세부 테이블의 `재평가잉여금` 행 | ⚠️ 3개사 MISS |
-| 30 | 확정급여부채 재측정 | XBRL→원문XML | XBRL 재무상태표 확정급여부채 재측정요소 OCI 잔액. fallback: 자본 세부 테이블의 `확정급여채무 재측정요소` 행 | ⚠️ 4개사 MISS |
-| 31 | CHECK | 계산 | Col24 − (Col25+…+Col30) | ⚠️ 세부항목 모두 있을 때만 |
-
-> **MISS 이유**: XBRL 재무상태표에서 OCI 세부항목이 회사마다 다른 방식으로 구분·보고되어 일부 회사는 자동 매핑 불가.  
-> 이런 경우 사업보고서 원문 XML의 자본변동표 자본 구성 테이블에서 추출하나, 그것도 없는 회사는 수동 입력 필요.
+| 25 | FVOCI 평가손익 | XBRL→원문XML | XBRL OCI 잔액; fallback: 자본 세부 테이블 | ⚠️ 3개사 MISS |
+| 26 | 보험계약 금융손익 | XBRL→원문XML | XBRL 보험계약 OCI 잔액; fallback: 자본 세부 테이블 | ⚠️ 5개사 MISS |
+| 27 | 재보험계약 금융손익 | XBRL→원문XML | XBRL 재보험계약 OCI 잔액; fallback: 자본 세부 테이블 | ⚠️ 8개사 MISS |
+| 28 | 현금흐름위험회피 | XBRL→원문XML | XBRL 현금흐름위험회피 OCI 잔액; fallback: 자본 세부 테이블 | ⚠️ 6개사 MISS |
+| 29 | 재평가잉여금 | XBRL→원문XML | XBRL 전기말 재평가잉여금; fallback: 자본 세부 테이블 | ⚠️ 3개사 MISS |
+| 30 | 확정급여부채 재측정 | XBRL→원문XML | XBRL 확정급여부채 재측정요소 OCI; fallback: 자본 세부 테이블 | ⚠️ 4개사 MISS |
 
 ---
 
@@ -379,47 +131,45 @@ XBRL이 아닌 보고서 원문(document.xml)에서 파싱하는 항목은 회�
 | 33 | 보험서비스수익 | XBRL | `dart_OperatingIncomeInsurance` | ✅ 12/12 |
 | 34 | 보험서비스비용 | XBRL | `dart_OperatingExpenseInsurance` | ✅ 12/12 |
 | 35 | 투자손익 | XBRL | `dart_InvestmentIncomeExpenses` | ✅ 12/12 |
-| 36 | 보험금융손익 | XBRL | `dart_InsuranceFinanceIncome` − `dart_InsuranceFinanceExpenses` | ✅ 12/12 |
-| 37 | 재보험금융손익 | XBRL | `dart_FinanceIncomeFromReinsurance` − `dart_FinanceExpensesFromReinsurance` | ⚠️ 교보 오차 (income-only 구조) |
-| 38 | 금융손익 | 계산 | Col35 − Col36 − Col37 + Col39 − Col40 | ⚠️ 삼성화재·DB손보 소오차, KB라이프 MISS |
+| 36 | 보험금융손익 | XBRL | Insurance finance income − expense | ✅ 12/12 |
+| 37 | 재보험금융손익 | XBRL | Reinsurance finance income − expense | ⚠️ 교보 오차 |
+| 38 | 금융손익 | 계산 | Col35 − Col36 − Col37 + Col39 − Col40 | ⚠️ 일부 소오차 |
 | 39 | 재산관리비 | XBRL | `ifrs-full_SellingGeneralAndAdministrativeExpense` | ✅ 11/11 |
-| 40 | 기타투자손익 | XBRL | 수수료+임대료+기타수익−기타비용 합산 | ⚠️ 삼성화재·DB손보 소오차 |
+| 40 | 기타투자손익 | XBRL | 수수료+임대료+기타수익−기타비용 합산 | ⚠️ 일부 소오차 |
 | 41 | 영업이익 | XBRL | `ifrs-full_ProfitLossFromOperatingActivities` | ✅ 12/12 |
-| 42 | 영업외손익 | XBRL | `ifrs-full_NonOperatingProfitLoss` (없으면 Col43−Col41) | ✅ 12/12 |
+| 42 | 영업외손익 | XBRL | `ifrs-full_NonOperatingProfitLoss` | ✅ 12/12 |
 | 43 | 세전손익 | XBRL | `ifrs-full_ProfitLossBeforeTax` | ✅ 12/12 |
 | 44 | 당기순이익 | XBRL | `ifrs-full_ProfitLoss` | ✅ 12/12 |
-| 45~47 | CHECK 1~3 | 계산 | 영업/투자/보험+투자 체크 | ✅ 12/12 |
 
 ---
 
 ### 자본변동표 — OCI 변동분
 
-| Col | 항목 | 소스 | 태그 / 방법 | 결과 |
-|-----|------|------|-----------|------|
-| 55 | OCI 기초잔액 | XBRL | 전기말 `ifrs-full_AccumulatedOtherComprehensiveIncome` | ✅ 12/12 |
-| 56 | FVOCI 평가손익 변동 | XBRL | `OtherComprehensiveIncomeNetOfTax...FVOCI...` | ⚠️ 동양·현대해상 소오차 |
-| 57 | 대손충당금 변동 | XBRL | `OtherComprehensiveIncomeNetOfTaxCreditLosses...` | ❌ 전 회사 미추출 (교보 1개사만 해당, 금액 소액) |
-| 58 | 보험계약금융손익 OCI | XBRL | 보험OCI + 재보험OCI 합산 | ✅ 12/12 |
-| 59 | 현금흐름위험회피 변동 | XBRL | `OtherComprehensiveIncomeNetOfTaxCashFlowHedges` | ⚠️ 교보 소오차 |
-| 60 | 재평가잉여금 변동 | XBRL | `OtherComprehensiveIncomeNetOfTaxGainsLossesOnRevaluation` | ⚠️ 동양·현대해상·DB손보 오차 |
-| 61 | 확정급여부채 재측정 | XBRL | `OtherComprehensiveIncomeNetOfTax...RemeasurementsOfDefinedBenefitPlans` | ✅ 12/12 |
-| 62 | 해외사업환산손익 | XBRL | `OtherComprehensiveIncomeNetOfTaxExchangeDifferencesOnTranslation` | ⚠️ 동양 MISS |
-| 63 | OCI 기말잔액 | 계산 | = Col17 | ✅ 12/12 |
-| 64 | CHECK | 계산 | Col63 − Col55 − (Col56~62) 합산 | ⚠️ Col57 없는 회사는 오차 가능 |
+| Col | 항목 | 소스 | 결과 |
+|-----|------|------|------|
+| 55 | OCI 기초잔액 | XBRL | ✅ 12/12 |
+| 56 | FVOCI 평가손익 변동 | XBRL | ⚠️ 동양·현대해상 소오차 |
+| 57 | 대손충당금 변동 | XBRL | ❌ 대부분 MISS (해당 회사 소액) |
+| 58 | 보험계약금융손익 OCI | XBRL | ✅ 12/12 |
+| 59 | 현금흐름위험회피 변동 | XBRL | ⚠️ 교보 소오차 |
+| 60 | 재평가잉여금 변동 | XBRL | ⚠️ 동양·현대해상·DB손보 오차 |
+| 61 | 확정급여부채 재측정 | XBRL | ✅ 12/12 |
+| 62 | 해외사업환산손익 | XBRL | ⚠️ 동양 MISS |
+| 63 | OCI 기말잔액 | 계산 | = Col17 ✅ |
 
 ---
 
 ### 자본변동표 — 이익잉여금
 
-| Col | 항목 | 소스 | 태그 / 방법 | 결과 |
-|-----|------|------|-----------|------|
-| 65 | 이익잉여금 기초 | XBRL | 전기말 `ifrs-full_RetainedEarnings` | ⚠️ 메리츠화재 소오차 |
-| 66 | 결산배당 | XBRL | `dart_DividendsPaidClassifiedAsFinancingActivities` | ✅ 8/8 (배당 회사만) |
-| 67 | 자기주식 소각/처분 | XBRL | `ifrs-full_CancellationOfTreasuryShares` (RetainedEarnings component) | ✅ 2/2 (해당 회사만) |
-| 68 | 순이익 | 계산 | = Col44 | ✅ 12/12 |
-| 69 | 기타 자본변동 | XBRL | `dart_TransferOfAmountRecognised...` (RetainedEarnings component) | ⚠️ 동양 소오차, KB손보 오류 |
-| 70 | 신종자본증권 배당 | XBRL | `dart_DividendToHybridBond` (RetainedEarnings component) | ⚠️ 메리츠화재 소오차, 현대해상 MISS |
-| 71 | 이익잉여금 기말 | 계산 | = Col18 | ✅ 12/12 |
+| Col | 항목 | 소스 | 결과 |
+|-----|------|------|------|
+| 65 | 이익잉여금 기초 | XBRL | ⚠️ 메리츠화재 소오차 |
+| 66 | 결산배당 | XBRL | ✅ 8/8 (배당 회사만) |
+| 67 | 자기주식 소각/처분 | XBRL | ✅ 2/2 (해당 회사만) |
+| 68 | 순이익 | 계산 | = Col44 ✅ |
+| 69 | 기타 자본변동 | XBRL | ⚠️ 동양 소오차·KB손보 오류 |
+| 70 | 신종자본증권 배당 | XBRL | ⚠️ 메리츠 소오차·현대해상 MISS |
+| 71 | 이익잉여금 기말 | 계산 | = Col18 ✅ |
 
 ---
 
@@ -427,28 +177,26 @@ XBRL이 아닌 보고서 원문(document.xml)에서 파싱하는 항목은 회�
 
 | Col | 항목 | 소스 | 태그 / 방법 | 결과 |
 |-----|------|------|-----------|------|
-| 73 | BEL | XBRL → 원문XML | XBRL 보험계약 주석의 BEL 구성요소 합계. 교보·신한라이프·KB생명·메리츠·KB손보는 XBRL에 BEL/RA/CSM 분리 데이터 없어 1분기보고서 원문XML의 구성요소 테이블에서 파싱 | ✅ 12/12 |
-| 74 | RA | XBRL → 원문XML | 동일 | ✅ 12/12 |
-| 75 | CSM | XBRL → 원문XML | 동일 | ✅ 12/12 |
-| 76 | 신계약CSM | XBRL → 원문XML | XBRL 보험계약 변동 주석의 신계약 CSM 항목. fallback: 사업보고서 원문XML의 CSM 변동표 `신계약` 행 | ⚠️ 동양 MISS |
-| 77 | CSM 상각 | XBRL → 원문XML | XBRL 보험계약 변동 주석의 서비스이전 상각 항목. fallback: 원문XML CSM 변동표 `보험계약마진 상각` 행 | ⚠️ 동양 MISS |
-| 78 | CSM 조정 | XBRL → 원문XML | XBRL 보험계약 변동 주석의 추정치 변동 조정 항목. fallback: 원문XML CSM 변동표 `추정치 변동` 행 | ✅ 12/12 |
-| 79 | 보험금융손익(CSM) | XBRL → 원문XML | XBRL 보험계약 변동 주석의 보험금융손익 항목. fallback: 원문XML CSM 변동표 `보험금융손익` 행 | ⚠️ DB손보 MISS |
-| 80 | 전기말 CSM | XBRL → 원문XML | XBRL 전기말 보험계약부채의 CSM 잔액. fallback: 원문XML CSM 변동표 `기초` 행 | ⚠️ 삼성화재·DB손보 MISS |
-| 82 | CHECK | 계산 | Col80+76−77+78+79−75 | ⚠️ 구성항목 일부 MISS인 경우 오차 |
+| 73 | BEL | XBRL → 원문XML | XBRL 보험계약부채 구성요소 BEL. fallback: 1분기보고서 원문XML 구성요소 테이블 | ✅ 12/12 |
+| 74 | RA | XBRL → 원문XML → **FISIS** | 동일; XBRL/원문XML 실패 시 FISIS SH156/SI152 A112+A122 | ✅ 12/12 |
+| 75 | CSM | XBRL → 원문XML → **FISIS** | 동일; XBRL/원문XML 실패 시 FISIS SH156/SI152 A113 | ✅ 12/12 |
+| 76 | 신계약CSM | XBRL → 원문XML | XBRL CSM 변동 주석; fallback: 사업보고서 원문XML CSM 변동표 | ⚠️ 동양 MISS |
+| 77 | CSM 상각 | XBRL → 원문XML | 동일 | ⚠️ 동양 MISS |
+| 78 | CSM 조정 | XBRL → 원문XML | 동일 | ✅ 12/12 |
+| 79 | 보험금융손익(CSM) | XBRL → 원문XML | 동일 | ⚠️ DB손보 MISS |
+| 80 | 전기말 CSM | XBRL → 원문XML | XBRL 전기말 CSM; fallback: 원문XML 변동표 `기초` 행 | ⚠️ 삼성화재·DB손보 MISS |
+
+> **RA·CSM FISIS fallback**: 분기/반기는 FISIS 값을 우선 사용(XBRL보다 정확). 사업보고서는 XBRL/원문XML에서 뽑지 못한 경우만 FISIS 사용.  
+> **손보사 RA 오차**: FISIS SI152 RA 집계 기준이 엑셀 기준(재보험 제외)과 5~10% 차이 있어 XBRL 우선.
 
 ---
 
 ### CSM 기간별 기대수익인식금액
 
-| Col | 항목 | 소스 | 태그 / 방법 | 결과 |
-|-----|------|------|-----------|------|
-| 83~87 | 1년이하~10년초과 | 원문XML | 사업보고서 CSM 만기 테이블 파싱 | ⚠️ 교보·한화·동양·DB손보·삼성화재 OK / 나머지 7개사 MISS |
-| 88 | 합계 | 계산 | = Col75 | ✅ 11/11 |
-| 89 | CHECK | 계산 | Col88 − (Col83~87) | ⚠️ Col83~87이 MISS인 7개사는 계산 불가 |
-
-> **MISS 이유**: 신한라이프·삼성·미래에셋·KB라이프·현대해상·메리츠·KB손보의 사업보고서 원문 XML에  
-> CSM 기간별 테이블이 없음. 해당 데이터는 다른 경로(IR 자료 등) 에서 수동 입력 필요.
+| Col | 항목 | 소스 | 결과 |
+|-----|------|------|------|
+| 83~87 | 1년이하~10년초과 | 원문XML | ⚠️ 교보·한화·동양·DB손보·삼성화재 OK / 나머지 7개사 MISS (테이블 미공시) |
+| 88 | 합계 | 계산 | = Col75 ✅ 11/11 |
 
 ---
 
@@ -456,11 +204,11 @@ XBRL이 아닌 보고서 원문(document.xml)에서 파싱하는 항목은 회�
 
 | Col | 항목 | 소스 | 태그 / 방법 | 결과 |
 |-----|------|------|-----------|------|
-| 92~94 | 잠정치 (비율·가용·요구) | 원문XML | 사업보고서 지급여력비율 테이블 | ⚠️ 삼성·KB라이프·삼성화재·현대해상·KB손보 MISS |
-| 95~97 | 최종치 (비율·가용·요구) | 원문XML | 지급여력비율 테이블 당기값 | ⚠️ 삼성·KB라이프·삼성화재·현대해상·KB손보·한화 MISS (산출중) |
+| 92~94 | 잠정치 (비율·가용·요구) | 원문XML | 사업보고서 지급여력비율 테이블 | ⚠️ 일부 회사 MISS (산출중) |
+| 95~97 | 최종치 (비율·가용·요구) | 원문XML → **FISIS** | 사업보고서는 1분기보고서 원문XML 전년도 열; 분기/반기는 FISIS SH021/SI021 | ✅ 2512 12/12, 분기 12/12 |
 
-> **MISS 이유**: 사업보고서 제출 시점에 K-ICS가 아직 `산출중(-)` 상태인 회사 다수.  
-> → 해당 회사들은 이후 별도 공시 또는 1분기보고서에서 확인 필요.
+> - **사업보고서(연간)**: 다음 해 1분기보고서(`doc_1q_{year+1}.xml`)의 "전기" 열에서 확정치 추출.  
+> - **분기/반기**: FISIS API 해당 분기 직접 조회. 잠정치(Col92~94)는 검증 제외.
 
 ---
 
@@ -468,60 +216,92 @@ XBRL이 아닌 보고서 원문(document.xml)에서 파싱하는 항목은 회�
 
 | Col | 항목 | 소스 | 태그 / 방법 | 결과 |
 |-----|------|------|-----------|------|
-| 99 | 해약환급금준비금 | XBRL | `dart_SurrenderValueReserve` | ⚠️ 신한라이프·KB라이프 MISS |
+| 99 | 해약환급금준비금 | XBRL → **FISIS** | `dart_SurrenderValueReserve`; FISIS SH151/SI147 F46로 항상 갱신 | ✅ 12/12 |
+
+> XBRL보다 FISIS 값이 더 안정적이므로 FISIS 값을 우선 적용합니다.
 
 ---
 
-### 손해율
-
-| Col | 항목 | 소스 | 태그 / 방법 | 결과 |
-|-----|------|------|-----------|------|
-| 101 | 예상손해율(A) | 원문XML | 보험금 예실차비율 테이블 `예상손해율` 항목 | ⚠️ 미래에셋·현대해상 MISS (테이블 없음), 한화 소오차 |
-| 102 | 실제손해율(B) | 원문XML | 동일 테이블 `실제손해율` 항목 | ⚠️ 미래에셋·현대해상 MISS, 한화 소오차 |
-| 103 | 예실차비율(b−a) | 계산 | Col101 − Col102 | ⚠️ Col101·102가 MISS/오차인 경우 동일하게 영향 |
-| 104 | 실제/예상보험금 | 계산 | Col102 / Col101 | ⚠️ Col101·102가 MISS/오차인 경우 동일하게 영향 |
-| 107~109 | 손해율·위험보험료·사고보험금 | — | **추출 불가** | ❌ 전 회사 MISS |
-
-> **107~109 MISS 이유**: 위험보험료·사고보험금 절대값은 XBRL 태그가 없고, 원문 XML에서도  
-> 보험종류별로 분리되어 있어 합산 추출이 복잡함.
-
----
-
-### 예실차 세부
+### 손해율 · 예실차
 
 | Col | 항목 | 소스 | 결과 |
 |-----|------|------|------|
+| 101 | 예상손해율(A) | 원문XML | ⚠️ 미래에셋·현대해상 MISS |
+| 102 | 실제손해율(B) | 원문XML | ⚠️ 미래에셋·현대해상 MISS |
+| 103 | 예실차비율(b−a) | 계산 | Col101 − Col102 |
+| 104 | 실제/예상보험금 | 계산 | Col102 / Col101 |
+| 107 | 손해율(누계) | — | ❌ 전 회사 MISS |
+| 108 | 위험보험료 | — | ❌ 전 회사 MISS |
+| 109 | 사고보험금 | — | ❌ 전 회사 MISS |
 | 111 | 예실차 합계 | — | ❌ 전 회사 MISS |
-| 112 | 보험금예실차 | — | ❌ 전 회사 MISS |
-| 113~114 | 예상/실제보험금 | — | ❌ 전 회사 MISS |
-| 115 | 사업비예실차 | — | ❌ 전 회사 MISS |
-| 116~117 | 예상/실제사업비 | — | ❌ 전 회사 MISS |
+| 112~117 | 예실차 세부 | — | ❌ 전 회사 MISS |
 
-> **MISS 이유**: DART XBRL에 예실차 관련 단독 태그 없음.  
-> 보험종류별 다차원 집계가 필요해 자동화 어려움. **수동 입력 필요.**
+> **107~117 MISS 이유**: XBRL 태그 없음. FISIS에도 해당 통계표 미존재. 원문XML에서도 보험종류별 분리 집계라 자동 합산이 어려움. **수동 입력 필요.**
 
 ---
 
 ### 계리적 가정변경 민감도
 
-| Col | 항목 | 소스 | 태그 / 방법 | 결과 |
-|-----|------|------|-----------|------|
-| 146~150 | BEL+RA기준 (해지율·위험률·사업비·기타·물량) | XBRL → 원문XML | XBRL 보험계약 주석의 가정변경 효과 중 BEL+RA 기준 항목. fallback: 사업보고서 원문XML의 가정변경효과 테이블 | ⚠️ 동양·삼성화재 MISS, 한화 부호오류 |
-| 151 | 기타 감응도 | — | ❌ MISS (일부 회사만 공시, 자동화 불가) | |
-| 153~158 | CSM기준 (해지율~손실요소) | XBRL → 원문XML | XBRL 보험계약 주석의 가정변경 효과 중 CSM 기준 항목. fallback: 사업보고서 원문XML의 가정변경효과 테이블 | ⚠️ 동양·삼성화재 MISS |
-| 159 | CHECK | — | ⚠️ 교보·삼성화재·현대해상 오차 |
+| Col | 항목 | 소스 | 결과 |
+|-----|------|------|------|
+| 146~150 | BEL+RA기준 (해지율·위험률·사업비·기타·물량) | XBRL → 원문XML | ⚠️ 동양·삼성화재 MISS, 한화 부호오류 |
+| 153~158 | CSM기준 (해지율~손실요소) | XBRL → 원문XML | ⚠️ 동양·삼성화재 MISS |
+
+---
+
+## XBRL Taxonomy
+
+`data/taxonomy.csv` — XBRL 태그 ID와 한글명 매핑표.
+
+| 분류 | prefix | 개수 | 설명 |
+|------|--------|-----:|------|
+| IFRS 표준 | `ifrs-full_` | 1,562 | IASB 정의 국제 표준 태그 |
+| DART 한국 추가 | `dart_` | 967 | 금융감독원 보험업 특화 추가 태그 |
+| 회사별 커스텀 | `entity{corp_code}_` | 10,844 | 각 회사 자체 정의 태그 |
+
+---
+
+## 회사마다 결과가 다른 이유
+
+### 이유 1 — 같은 항목을 저장하는 XBRL 구조가 회사마다 다르다
+
+IFRS17은 어떤 필터(dim)를 얼마나 걸지 회사 재량이라 같은 항목인데 구조가 다릅니다.
+
+**CSM (Col75) 예시:**
+
+| 회사 | Dim 수 | 구조 |
+|------|--------|------|
+| 삼성생명 | 2-dim | `SeparateMember` + `InsuranceContractsIssuedMember`, 태그=`ContractualServiceMargin` |
+| 현대해상 | 5-dim | 위에 `PAA미적용` + `LRC` + `CSM컴포넌트` 필터 추가 |
+
+스크립트는 조건을 순서대로 시도해 처음 매칭되는 패턴을 사용합니다. 패턴을 한 번 정의하면 `--period all`로 전 기간 일괄 처리됩니다.
+
+**2412 BEL/CSM MISS 원인:** 2024년까지 XBRL에 BEL/RA/CSM 분리 태그가 없던 회사들이 많음. 2025년 사업보고서부터 대부분 확대 공시.
+
+### 이유 2 — 원문 XML에 테이블 자체가 없거나 형태가 다르다
+
+공시 의무 항목이 아닌 경우 회사 재량으로 작성 여부·형태가 결정됩니다.
+
+- **운용자산(Col22)**: 생보사는 대부분 테이블 있음 → FISIS 우선 적용. 손보사 일부 원문에만 있음.
+- **CSM기간별(Col83~87)**: 교보·한화·동양·DB손보·삼성화재만 공시. 신한라이프·삼성 등 7개사는 미공시.
+- **예실차(Col111~117)**: XBRL 태그 없음, FISIS에도 없음 → 전 회사 수동 입력 필요.
 
 ---
 
 ## 파일 구조
 
 ```
-parse_annual.py       실행 스크립트
-dart_api.py           DART OpenAPI 연동
+parse_annual.py       메인 실행 스크립트
+dart_api.py           DART OpenAPI + FISIS API 연동
+verify_2512.py        정답 엑셀 대비 검증 스크립트
 DATA_작업_빈칸.xlsx    채울 대상 Excel
 data/
-  taxonomy.csv        XBRL 태그 한글명 매핑 (자동 생성)
-  xbrl_taxonomy.xlsx  taxonomy Excel 버전
-  {회사명}/           XBRL·원문XML 캐시 (자동 생성)
+  taxonomy.csv                   XBRL 태그 한글명 매핑 (자동 생성)
+  data_sheet_{YYMM}.csv          기간별 추출 결과
+  {회사명}/
+    사업보고서/{연도}/             XBRL 파일 캐시
+    doc_annual_{연도}.xml         사업보고서 원문 캐시
+    doc_1q_{연도}.xml             1분기보고서 원문 캐시 (K-ICS 확정치용)
+    doc_halfyear_{연도}.xml       반기보고서 원문 캐시
+    doc_3q_{연도}.xml             3분기보고서 원문 캐시
 ```
-
