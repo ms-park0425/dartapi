@@ -62,7 +62,7 @@ FISIS_API_KEY = "your_api_key_here"
 - **2312 (49%)**: IFRS17 도입 첫 해로 XBRL 태그 구조가 정착되지 않아 패턴 불일치 다수. 전기말(2022년말) XBRL 미제공으로 이전기 비교수치 불일치.
 - **2412 (67%)**: XBRL에 BEL/RA/CSM 구성요소 태그가 없는 회사 다수 (2025년부터 확대 공시). FISIS로 보완.
 - **2503·2506·2509 (62~71%)**: 분기/반기는 사업보고서 전용 항목(CSM변동·감응도·CSM기간별) 정답 자체가 없어 비교 대상이 적음. K-ICS는 FISIS API로 채움.
-- **2512 (85%)**: 사업보고서 전용 항목 포함 최고 정확도. 주요 MISS: 예실차 세부(Col111~117), 일부 CSM기간별(Col83~87), OCI누계 세부(Col26~30 일부).
+- **2512 (85%)**: 사업보고서 전용 항목 포함 최고 정확도. 주요 MISS: 예실차 세부(Col111-117), 일부 CSM기간별(Col83-87), OCI누계 세부(Col26-30 일부).
 
 > **2412 BEL/CSM MISS 원인**: 삼성생명 기준 2024년 XBRL 태그 수 245개(BEL/RA/CSM 분리 없음) → 2025년 988개(구성요소 분리 태그 신설). 2025년부터 대부분 회사가 XBRL 공시 수준을 크게 확대해 해결됨.
 
@@ -85,7 +85,7 @@ FISIS_API_KEY = "your_api_key_here"
 | 6 | FVOCI | XBRL | `ifrs-full_FinancialAssetsAtFairValueThroughOtherComprehensiveIncome` | ✅ 12/12 |
 | 7 | AC | XBRL | `ifrs-full_FinancialAssetsAtAmortisedCost` | ✅ 12/12 |
 | 8 | 종속·관계기업 | XBRL | `ifrs-full_InvestmentsInSubsidiariesJointVenturesAndAssociates` | ✅ 11/11 |
-| 9~11 | 총자산대비비중 | 계산 | Col5~7 / Col4 | ✅ |
+| 9-11 | 총자산대비비중 | 계산 | Col5-7 / Col4 | ✅ |
 | 12 | 부채 | XBRL | `ifrs-full_Liabilities` | ✅ 12/12 |
 | 13 | 보험계약부채 | XBRL | `ifrs-full_InsuranceContractsIssuedThatAreLiabilities` | ✅ 12/12 |
 | 14 | 자본(신종제외) | 계산 | Col15 − Col16 | ✅ 12/12 |
@@ -208,7 +208,7 @@ FISIS_API_KEY = "your_api_key_here"
 | 95~97 | 최종치 (비율·가용·요구) | 원문XML → **FISIS** | 사업보고서는 1분기보고서 원문XML 전년도 열; 분기/반기는 FISIS SH021/SI021 | ✅ 2512 12/12, 분기 12/12 |
 
 > - **사업보고서(연간)**: 다음 해 1분기보고서(`doc_1q_{year+1}.xml`)의 "전기" 열에서 확정치 추출.  
-> - **분기/반기**: FISIS API 해당 분기 직접 조회. 잠정치(Col92~94)는 검증 제외.
+> - **분기/반기**: FISIS API 해당 분기 직접 조회. 잠정치(Col92-94)는 검증 제외.
 
 ---
 
@@ -283,8 +283,8 @@ IFRS17은 어떤 필터(dim)를 얼마나 걸지 회사 재량이라 같은 항�
 공시 의무 항목이 아닌 경우 회사 재량으로 작성 여부·형태가 결정됩니다.
 
 - **운용자산(Col22)**: 생보사는 대부분 테이블 있음 → FISIS 우선 적용. 손보사 일부 원문에만 있음.
-- **CSM기간별(Col83~87)**: 교보·한화·동양·DB손보·삼성화재만 공시. 신한라이프·삼성 등 7개사는 미공시.
-- **예실차(Col111~117)**: XBRL 태그 없음, FISIS에도 없음 → 전 회사 수동 입력 필요.
+- **CSM기간별(Col83-87)**: 교보·한화·동양·DB손보·삼성화재만 공시. 신한라이프·삼성 등 7개사는 미공시.
+- **예실차(Col111-117)**: XBRL 태그 없음, FISIS에도 없음 → 전 회사 수동 입력 필요.
 
 ---
 
