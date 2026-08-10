@@ -70,6 +70,211 @@ FISIS_API_KEY = "your_api_key_here"
 
 ---
 
+## 회사마다 결과가 다른 이유
+
+자동화가 안 되거나 회사마다 결과가 다른 이유는 크게 두 가지입니다.
+
+---
+
+### 이유 1 — XBRL 안에서 같은 값을 저장하는 구조가 회사마다 다르다
+
+XBRL은 숫자 하나를 저장할 때 **"이 숫자가 어떤 조건의 값인가"를 함께 태깅**합니다.  
+엑셀 피벗테이블에서 필터를 걸어 특정 셀 값을 뽑는 것과 같고, 그 필터 개수를 **dim**이라고 부릅니다.
+
+IFRS17은 어떤 필터를 얼마나 걸지 회사 재량이라, **같은 항목인데 회사마다 필터 구조가 다릅니다.**
+
+#### DATA 시트 Col75 (CSM 잔액) — 같은 숫자를 찾는 필터가 회사마다 다르다
+
+**삼성생명 — 2-dim: 필터 2개, 값 하나로 바로 저장**
+
+```
+필터① 재무제표 종류  = 별도 (SeparateMember)
+필터② 보험계약 구분  = 발행계약 전체 (InsuranceContractsIssuedMember)
+      + 태그 자체가 ContractualServiceMargin → CSM임을 의미
+```
+
+실제 XBRL:
+```xml
+<ifrs-full:ContractualServiceMargin
+  contextRef="CFY2025eFY_..._SeparateMember_..._InsuranceContractsIssuedMember"
+  decimals="-6">13217874000000</ifrs-full:ContractualServiceMargin>
+```
+contextRef가 가리키는 context 정의:
+```xml
+<xbrldi:explicitMember dimension="ConsolidatedAndSeparateFinancialStatementsAxis">ifrs-full:SeparateMember</xbrldi:explicitMember>
+<xbrldi:explicitMember dimension="DisaggregationOfInsuranceContractsAxis">ifrs-full:InsuranceContractsIssuedMember</xbrldi:explicitMember>
+```
+→ **13,217,874,000,000원 = 13,217,874 백만원** ✅
+
+---
+
+**현대해상 — 5-dim: 필터 5개, 값 하나로 저장 (내부적으로는 6-dim 세부 내역도 병존)**
+
+```
+필터① 재무제표 종류  = 별도
+필터② 보험계약 구분  = 발행계약 전체
+필터③ 회계모형       = PAA 미적용 계약
+필터④ 잔여보장       = LRC (잔여보장부채)
+필터⑤ 구성요소       = CSM
+```
+
+실제 XBRL (5-dim 합계 태그):
+```xml
+<ifrs-full:InsuranceContractsLiabilityAsset
+  contextRef="CFY2025eFY_..._SeparateMember_..._InsuranceContractsIssuedMember_..._InsuranceContractsOtherThanThoseToWhichPremiumAllocationApproachHasBeenAppliedMember_..._LiabilitiesForRemainingCoverageMember_..._ContractualServiceMarginMember"
+  decimals="0">8977842069322</ifrs-full:InsuranceContractsLiabilityAsset>
+```
+contextRef가 가리키는 context 정의:
+```xml
+<xbrldi:explicitMember dimension="ConsolidatedAndSeparateFinancialStatementsAxis">ifrs-full:SeparateMember</xbrldi:explicitMember>
+<xbrldi:explicitMember dimension="DisaggregationOfInsuranceContractsAxis">ifrs-full:InsuranceContractsIssuedMember</xbrldi:explicitMember>
+<xbrldi:explicitMember dimension="InsuranceContractsAxis">ifrs-full:InsuranceContractsOtherThanThoseToWhichPremiumAllocationApproachHasBeenAppliedMember</xbrldi:explicitMember>
+<xbrldi:explicitMember dimension="InsuranceContractsByRemainingCoverageAndIncurredClaimsAxis">dart:LiabilitiesForRemainingCoverageMember</xbrldi:explicitMember>
+<xbrldi:explicitMember dimension="InsuranceContractsByComponentsAxis">ifrs-full:ContractualServiceMarginMember</xbrldi:explicitMember>
+```
+→ **8,977,842,069,322원 = 8,977,842 백만원** ✅
+
+같은 파일 안에 6-dim 세부 내역도 함께 존재 (필터⑤ 뒤에 보험종류 필터가 추가됨):
+```
+장기보험 (비배당) → 8,868,911,078,887 원
+장기보험 (배당)   →   108,930,990,435 원
+일반보험          →               0 원
+자동차보험        →               0 원
+                 ───────────────────────
+                   8,977,842,069,322 원  ← 5-dim 합계와 일치
+```
+
+스크립트는 5-dim 합계 태그를 직접 읽고, 없는 경우 6-dim 세부를 합산하는 방식으로 동작합니다.
+
+#### 스크립트가 어떻게 올바른 context를 찾는가
+
+XBRL 파일 안에는 context id가 수백~수천 개 있습니다. id 문자열을 직접 매칭하는 게 아니라,  
+각 context 안의 dimension 목록을 읽어 조건을 확인합니다.
+
+```python
+for ctx in root.findall("context"):
+    dims = {}
+    for m in ctx.iter("explicitMember"):
+        dims[m.get("dimension")] = m.text   # 필터 목록 수집
+
+    # 원하는 조건인지 확인
+    if dims.get("ConsolidatedAndSeparateFinancialStatementsAxis") != "SeparateMember":
+        continue
+    if dims.get("DisaggregationOfInsuranceContractsAxis") != "InsuranceContractsIssuedMember":
+        continue
+    # → 이 context id가 우리가 원하는 것 → 이 id를 가진 값 태그를 찾아 읽음
+```
+
+회사를 미리 식별하는 게 아니라 **조건 자체를 순서대로 시도**합니다.  
+각 컬럼마다 "이 조건 → 안 되면 이 조건 → 그것도 안 되면 이 조건" 순서로 패턴이 정의되어 있고,  
+처음 매칭되는 패턴의 값을 사용합니다.
+
+```python
+def parse_insurance_components(root):
+    # 패턴A 먼저 시도 (삼성생명 2-dim: DisaggregationAxis에 BEL/RA/CSM 직접)
+    for ctx in ...:
+        if dims["DisaggregationAxis"] == "EstimatesOfPresentValueOfFutureCashFlowsMember":
+            bel = 이 context의 값
+            return bel          # 찾으면 바로 반환
+
+    # 패턴A 실패 → 패턴B 시도 (교보 등 3-dim: IssuedMember + ComponentsAxis)
+    for ctx in ...:
+        if dims["DisaggregationAxis"] == "InsuranceContractsIssuedMember"
+        and dims["ComponentsAxis"] == "EstimatesOfPresentValueOfFutureCashFlowsMember":
+            bel = 이 context의 값
+            return bel
+
+    # 패턴B도 실패 → 패턴C 시도 (현대해상 등 5~6-dim: 보험종류별 합산)
+    for ctx in ...:
+        if dims["InsuranceContractsAxis"] == "InsuranceContractsOtherThan..."
+        and dims["ComponentsAxis"] == "EstimatesOfPresentValueOfFutureCashFlowsMember":
+            bel += 이 context의 값     # 여러 개 합산
+    return bel
+```
+
+이 구조 덕분에 새 회사가 추가되거나 구조가 바뀌어도 기존 패턴에 매칭되면 자동 처리되고,  
+안 되면 새 패턴만 추가하면 됩니다.
+
+#### OCI 세부잔액 (Col25~30) — 3번째 axis 이름이 회사마다 달라서 MISS 발생
+
+| 회사 | 구조 | 방식 |
+|------|------|------|
+| 삼성생명 | **2-dim** | `ComponentsOfEquityAxis`에 FVOCI 잔액 멤버를 **직접** 넣음 |
+| 미래에셋·교보 등 | **3-dim** | `ComponentsOfEquityAxis = OCI누계액전체` 고정 + **회사 자체 정의 3번째 axis**로 세부 구분 |
+
+미래에셋 등은 3번째 axis 이름에 회사 고유 코드(`entity00112332:ChangesInAccumulatedOCI...`)가 들어가 회사마다 달라집니다.  
+표준 패턴으로 일괄 매핑이 안 되기 때문에 일부 회사 Col25~30이 MISS가 됩니다.
+
+#### CSM 변동표 (Col76~80) — dim 수에 따라 탐색 방식이 달라짐
+
+| 회사 | Dim 수 | 특이사항 |
+|------|--------|---------|
+| 삼성생명 | **3-dim** | `Separate` + `IssuedMember` + `TypesOfContractsAxis`(건강/생명 등) |
+| 미래에셋 | **4+5-dim 병행** | 신계약·상각은 4-dim, 전환방식(MRA/FVA)별 조정은 5-dim에 따로 있음 |
+| 삼성화재 | **6-dim** | 위에 `RemainingCoverageAxis` + `InputsToMethodsAxis(LossComponent)` 추가 |
+
+미래에셋은 같은 보고서 안에서 태그마다 4-dim과 5-dim에 나뉘어 저장되어 있어 두 패턴을 따로 탐색한 뒤 합산합니다.
+
+---
+
+### 이유 2 — 보고서 원문 XML에서 테이블 자체가 없거나 위치·형태가 다르다
+
+XBRL이 아닌 보고서 원문(document.xml)에서 파싱하는 항목은 회사가 해당 테이블을 아예 공시하지 않거나  
+다른 형태로 작성하면 추출이 불가능합니다.
+
+#### 운용자산 (Col22·23): 교보생명 ✅ vs 삼성화재 ❌
+
+**교보생명** — "II. 사업의 내용 > 영업의 현황"에 운용자산 테이블 존재:
+
+```xml
+<TD ROWSPAN="10">운용자산</TD>
+<TD>현ㆍ예금</TD>  <TD ALIGN="RIGHT">3,358,380</TD>
+...
+<TD>운용자산(B)</TD>  <TD ALIGN="RIGHT">107,254,263</TD>
+```
+
+**삼성화재** — 해당 테이블 자체가 없음:
+
+```xml
+<!-- "운용자산" 검색 결과: 퇴직연금 관련 텍스트 2건뿐 -->
+<TD>퇴직연금운용자산</TD>
+```
+
+손해보험사는 보험업 감독규정상 생명보험사에게 요구하는 자산종류별 운용현황표 공시의무가 없어 테이블 자체가 없습니다.
+
+#### K-ICS 지급여력비율 (Col92~94): 신한라이프 ✅ vs 삼성생명 ❌
+
+**신한라이프** — "5. 재무건전성" 섹션에 수치 테이블 존재:
+
+```xml
+<TR><TD>지급여력(A)</TD>      <TD ALIGN="RIGHT">98,765</TD></TR>
+<TR><TD>지급여력기준(B)</TD>   <TD ALIGN="RIGHT">47,934</TD></TR>
+<TR><TD>지급여력비율(A/B)</TD> <TD ALIGN="RIGHT">206.0</TD></TR>
+```
+
+**삼성생명** — 수치 테이블 없이 텍스트만 존재:
+
+```xml
+<P>연결실체는 감독기관에서 규정한 K-ICS 지급여력비율을 준수하고 있습니다.</P>
+```
+
+삼성생명은 실제 수치를 테이블로 공시하지 않아 파싱할 값이 없습니다.
+
+#### CSM 기간별 (Col83~87): 교보생명 ✅ vs 신한라이프 ❌
+
+**교보생명** — 1년 단위로 세분화된 테이블 존재:
+
+```xml
+<TH>1년 이하</TH><TH>1년~2년</TH>...<TH>10년 초과</TH><TH>합계</TH>
+<TD ALIGN="RIGHT">572,633</TD><TD ALIGN="RIGHT">501,445</TD>...
+<TD ALIGN="RIGHT">6,538,630</TD>
+```
+
+**신한라이프** — 사업보고서에 해당 테이블 없음.  
+공시 의무 항목이 아니라 작성 여부 자체가 회사 재량이라 자동화 불가.
+
+---
+
 ## 컬럼별 자동화 현황
 
 > **기준: 2512 (2025년 12월 사업보고서), 12개사**  
@@ -260,33 +465,6 @@ FISIS_API_KEY = "your_api_key_here"
 | IFRS 표준 | `ifrs-full_` | 1,562 | IASB 정의 국제 표준 태그 |
 | DART 한국 추가 | `dart_` | 967 | 금융감독원 보험업 특화 추가 태그 |
 | 회사별 커스텀 | `entity{corp_code}_` | 10,844 | 각 회사 자체 정의 태그 |
-
----
-
-## 회사마다 결과가 다른 이유
-
-### 이유 1 — 같은 항목을 저장하는 XBRL 구조가 회사마다 다르다
-
-IFRS17은 어떤 필터(dim)를 얼마나 걸지 회사 재량이라 같은 항목인데 구조가 다릅니다.
-
-**CSM (Col75) 예시:**
-
-| 회사 | Dim 수 | 구조 |
-|------|--------|------|
-| 삼성생명 | 2-dim | `SeparateMember` + `InsuranceContractsIssuedMember`, 태그=`ContractualServiceMargin` |
-| 현대해상 | 5-dim | 위에 `PAA미적용` + `LRC` + `CSM컴포넌트` 필터 추가 |
-
-스크립트는 조건을 순서대로 시도해 처음 매칭되는 패턴을 사용합니다. 패턴을 한 번 정의하면 `--period all`로 전 기간 일괄 처리됩니다.
-
-**2412 BEL/CSM MISS 원인:** 2024년까지 XBRL에 BEL/RA/CSM 분리 태그가 없던 회사들이 많음. 2025년 사업보고서부터 대부분 확대 공시.
-
-### 이유 2 — 원문 XML에 테이블 자체가 없거나 형태가 다르다
-
-공시 의무 항목이 아닌 경우 회사 재량으로 작성 여부·형태가 결정됩니다.
-
-- **운용자산(Col22)**: 생보사는 대부분 테이블 있음 → FISIS 우선 적용. 손보사 일부 원문에만 있음.
-- **CSM기간별(Col83-87)**: 교보·한화·동양·DB손보·삼성화재만 공시. 신한라이프·삼성 등 7개사는 미공시.
-- **예실차(Col111-117)**: XBRL 태그 없음, FISIS에도 없음 → 전 회사 수동 입력 필요.
 
 ---
 
