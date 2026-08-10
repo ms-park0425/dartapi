@@ -28,7 +28,7 @@ python parse_annual.py --period 2412    # 2024년 12월 사업보고서
 |------|------|---------|
 | **XBRL** | DART `fnlttXbrl.xml` API — 별도 재무제표 기준 `.xbrl` 파일 | BS·PL·CSM변동·OCI변동·감응도 |
 | **원문XML** | DART `document.xml` API — 보고서 원문 HTML 테이블 파싱 | K-ICS·운용자산·CSM기간별·손해율 |
-| **FISIS API** | 금융감독원 금융통계정보시스템 Open API | RA·CSM잔액·해약환급금·운용자산·신종자본증권·킥스(분기) |
+| **FISIS API** | 금융감독원 금융통계정보시스템 Open API | RA·CSM·해약환급금·운용자산·신종자본증권·OCI세부(Col26-30)·킥스(분기) |
 
 ### FISIS API 키 설정
 
@@ -48,21 +48,23 @@ FISIS_API_KEY = "your_api_key_here"
 
 | 기간 | 보고서 종류 | OK | FAIL | MISS | 비교대상 | **OK율** |
 |------|-----------|---:|-----:|-----:|--------:|--------:|
-| 2212 | 2022년 사업보고서 | 0 | 0 | 144 | 144 | **0%** |
-| 2312 | 2023년 사업보고서 | 477 | 213 | 275 | 965 | **49%** |
-| 2412 | 2024년 사업보고서 | 742 | 80 | 286 | 1,108 | **67%** |
-| 2503 | 2025년 1분기 | 573 | 60 | 297 | 930 | **62%** |
-| 2506 | 2025년 반기 | 607 | 93 | 256 | 956 | **64%** |
-| 2509 | 2025년 3분기 | 673 | 49 | 230 | 952 | **71%** |
-| 2512 | 2025년 사업보고서 | 942 | 34 | 137 | 1,113 | **85%** |
+| 2212 | 2022년 사업보고서 | 0 | 0 | 143 | 143 | **0%** |
+| 2312 | 2023년 사업보고서 | 510 | 197 | 248 | 955 | **53%** |
+| 2412 | 2024년 사업보고서 | 770 | 66 | 260 | 1,096 | **70%** |
+| 2503 | 2025년 1분기 | 618 | 34 | 278 | 930 | **66%** |
+| 2506 | 2025년 반기 | 646 | 64 | 246 | 956 | **68%** |
+| 2509 | 2025년 3분기 | 717 | 40 | 195 | 952 | **75%** |
+| 2512 | 2025년 사업보고서 | 948 | 32 | 133 | 1,113 | **85%** |
 
 **기간별 특이사항**
 
 - **2212 (0%)**: IFRS17 도입 이전(IFRS4 기준)으로 태그 체계가 완전히 달라 현재 파싱 패턴 미지원. 수동 입력 필요.
-- **2312 (49%)**: IFRS17 도입 첫 해로 XBRL 태그 구조가 정착되지 않아 패턴 불일치 다수. 전기말(2022년말) XBRL 미제공으로 이전기 비교수치 불일치.
-- **2412 (67%)**: XBRL에 BEL/RA/CSM 구성요소 태그가 없는 회사 다수 (2025년부터 확대 공시). FISIS로 보완.
-- **2503·2506·2509 (62~71%)**: 분기/반기는 사업보고서 전용 항목(CSM변동·감응도·CSM기간별) 정답 자체가 없어 비교 대상이 적음. K-ICS는 FISIS API로 채움.
-- **2512 (85%)**: 사업보고서 전용 항목 포함 최고 정확도. 주요 MISS: 예실차 세부(Col111-117), 일부 CSM기간별(Col83-87), OCI누계 세부(Col26-30 일부).
+- **2312 (53%)**: IFRS17 도입 첫 해로 XBRL 태그 구조가 정착되지 않아 패턴 불일치 다수. 전기말(2022년말) XBRL이 IFRS17 재작성 기준이라 이전기 비교수치 불일치.
+- **2412 (70%)**: XBRL에 BEL/RA/CSM 구성요소 태그가 없는 회사 다수(2025년부터 확대 공시). FISIS로 보완. OCI세부(Col26-30)도 FISIS 추가.
+- **2503 (66%)**: 1분기 보고서는 CSM변동·OCI누계·BEL 등 사업보고서 전용 항목이 없어 비교 대상 자체가 적음. K-ICS·RA·CSM·해약환급금·OCI세부는 FISIS로 채움.
+- **2506 (68%)**: 반기 보고서. 손보사 Col36~40(보험금융/재보험금융/금융손익/재산관리비/기타투자) 반기 기재 방식 차이 처리.
+- **2509 (75%)**: 3분기 보고서. doc_1q_2025.xml(실제 3분기 내용)에서 OCI세부·CSM기간별·손보사RA 추가 추출.
+- **2512 (85%)**: 사업보고서 전용 항목 포함 최고 정확도. 주요 MISS: 예실차 세부(Col111-117), 일부 CSM기간별(Col83-87).
 
 > **2412 BEL/CSM MISS 원인**: 삼성생명 기준 2024년 XBRL 태그 수 245개(BEL/RA/CSM 분리 없음) → 2025년 988개(구성요소 분리 태그 신설). 2025년부터 대부분 회사가 XBRL 공시 수준을 크게 확대해 해결됨.
 
@@ -114,12 +116,12 @@ FISIS_API_KEY = "your_api_key_here"
 | Col | 항목 | 소스 | 태그 / 방법 | 결과 |
 |-----|------|------|-----------|------|
 | 24 | OCI 합계 | 계산 | = Col17 | ✅ 12/12 |
-| 25 | FVOCI 평가손익 | XBRL→원문XML | XBRL OCI 잔액; fallback: 자본 세부 테이블 | ⚠️ 3개사 MISS |
-| 26 | 보험계약 금융손익 | XBRL→원문XML | XBRL 보험계약 OCI 잔액; fallback: 자본 세부 테이블 | ⚠️ 5개사 MISS |
-| 27 | 재보험계약 금융손익 | XBRL→원문XML | XBRL 재보험계약 OCI 잔액; fallback: 자본 세부 테이블 | ⚠️ 8개사 MISS |
-| 28 | 현금흐름위험회피 | XBRL→원문XML | XBRL 현금흐름위험회피 OCI 잔액; fallback: 자본 세부 테이블 | ⚠️ 6개사 MISS |
-| 29 | 재평가잉여금 | XBRL→원문XML | XBRL 전기말 재평가잉여금; fallback: 자본 세부 테이블 | ⚠️ 3개사 MISS |
-| 30 | 확정급여부채 재측정 | XBRL→원문XML | XBRL 확정급여부채 재측정요소 OCI; fallback: 자본 세부 테이블 | ⚠️ 4개사 MISS |
+| 25 | FVOCI 평가손익 | XBRL→원문XML | XBRL OCI 잔액; fallback: 자본 세부 테이블 | ⚠️ 소수 MISS/오차 |
+| 26 | 보험계약 금융손익 | XBRL→원문XML→**FISIS** | XBRL 보험계약 OCI 잔액; fallback: FISIS SH151/SI147 F64 | ✅ 대부분 OK |
+| 27 | 재보험계약 금융손익 | XBRL→원문XML→**FISIS** | XBRL 재보험계약 OCI 잔액; fallback: FISIS F65 | ✅ 12/12 |
+| 28 | 현금흐름위험회피 | XBRL→원문XML→**FISIS**(생보) | XBRL; 생보사 fallback: FISIS F67 | ✅ 대부분 OK |
+| 29 | 재평가잉여금 | XBRL→원문XML | XBRL 전기말 재평가잉여금; fallback: 자본 세부 테이블 | ⚠️ 교보·한화 오차 |
+| 30 | 확정급여부채 재측정 | XBRL→원문XML→**FISIS** | XBRL; fallback: FISIS F69 | ✅ 대부분 OK |
 
 ---
 
@@ -131,11 +133,11 @@ FISIS_API_KEY = "your_api_key_here"
 | 33 | 보험서비스수익 | XBRL | `dart_OperatingIncomeInsurance` | ✅ 12/12 |
 | 34 | 보험서비스비용 | XBRL | `dart_OperatingExpenseInsurance` | ✅ 12/12 |
 | 35 | 투자손익 | XBRL | `dart_InvestmentIncomeExpenses` | ✅ 12/12 |
-| 36 | 보험금융손익 | XBRL | Insurance finance income − expense | ✅ 12/12 |
-| 37 | 재보험금융손익 | XBRL | Reinsurance finance income − expense | ⚠️ 교보 오차 |
-| 38 | 금융손익 | 계산 | Col35 − Col36 − Col37 + Col39 − Col40 | ⚠️ 일부 소오차 |
-| 39 | 재산관리비 | XBRL | `ifrs-full_SellingGeneralAndAdministrativeExpense` | ✅ 11/11 |
-| 40 | 기타투자손익 | XBRL | 수수료+임대료+기타수익−기타비용 합산 | ⚠️ 일부 소오차 |
+| 36 | 보험금융손익 | XBRL | Insurance finance income − expense | ✅ 12/12 (반기 손보사=0) |
+| 37 | 재보험금융손익 | XBRL | Reinsurance finance income − expense | ✅ 12/12 (반기 손보사=0) |
+| 38 | 금융손익 | 계산 | Col35 − Col36 − Col37 + Col39 − Col40 | ✅ 12/12 (반기 손보사=0) |
+| 39 | 재산관리비 | XBRL | `ifrs-full_SellingGeneralAndAdministrativeExpense` | ✅ 11/11 (반기 손보사=0) |
+| 40 | 기타투자손익 | XBRL | 수수료+임대료+기타수익−기타비용 합산 | ⚠️ 일부 소오차 (반기 손보사=0) |
 | 41 | 영업이익 | XBRL | `ifrs-full_ProfitLossFromOperatingActivities` | ✅ 12/12 |
 | 42 | 영업외손익 | XBRL | `ifrs-full_NonOperatingProfitLoss` | ✅ 12/12 |
 | 43 | 세전손익 | XBRL | `ifrs-full_ProfitLossBeforeTax` | ✅ 12/12 |
@@ -216,9 +218,9 @@ FISIS_API_KEY = "your_api_key_here"
 
 | Col | 항목 | 소스 | 태그 / 방법 | 결과 |
 |-----|------|------|-----------|------|
-| 99 | 해약환급금준비금 | XBRL → **FISIS** | `dart_SurrenderValueReserve`; FISIS SH151/SI147 F46로 항상 갱신 | ✅ 12/12 |
+| 99 | 해약환급금준비금 | XBRL → **FISIS** | `dart_SurrenderValueReserve`; 연간은 FISIS F46 우선, 분기는 XBRL 우선 | ✅ 12/12 |
 
-> XBRL보다 FISIS 값이 더 안정적이므로 FISIS 값을 우선 적용합니다.
+> 연간 사업보고서는 FISIS F46이 XBRL보다 안정적이어서 우선 사용. 분기는 엑셀이 전년도 연말 확정치 기준이라 XBRL 값을 사용.
 
 ---
 

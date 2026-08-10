@@ -597,30 +597,39 @@ def fetch_fisis_balance(corp_name: str, base_month: str) -> dict:
         if ra:  result[74] = ra / 1e6
         if csm: result[75] = csm / 1e6
 
-    # 재무상태표 자산 (운용자산)
-    a_data = _fetch("SH150" if is_life else "SI146")
-    if a_data:
-        run = a_data.get("A1", 0)
-        if run:
-            if is_life:
-                # SH152(특별계정) 합산 여부를 논리적으로 판별:
-                # A1 + SH152_A ≈ SH150_A(총자산) 이면 A1이 일반계정만 → 합산
-                # 그렇지 않으면 A1이 이미 전체 포함 → 그대로 사용
-                total = a_data.get("A", 0)
-                if total > 0:
-                    sa_data = _fetch("SH152")
-                    sa_total = sa_data.get("A", 0)
-                    if sa_total > 0 and abs(run + sa_total - total) / total < 0.015:
-                        run += sa_total
-            result[22] = run / 1e6
+    # 재무상태표 자산 (운용자산, 총자산)
+    # 한화생명/KB생명: FISIS A1 기준이 엑셀과 달라서 제외
+    _NO_FISIS_COL22 = {"한화생명", "KB생명"}
+    if corp_name not in _NO_FISIS_COL22 or not is_life:
+        a_data = _fetch("SH150" if is_life else "SI146")
+        if a_data:
+            total_a = a_data.get("A", 0)
+            if corp_name not in _NO_FISIS_COL22:
+                run = a_data.get("A1", 0)
+                if run:
+                    if is_life:
+                        if total_a > 0:
+                            sa_data = _fetch("SH152")
+                            sa_total = sa_data.get("A", 0)
+                            if sa_total > 0 and abs(run + sa_total - total_a) / total_a < 0.015:
+                                run += sa_total
+                    result[22] = run / 1e6
 
-    # 재무상태표 부채자본 (신종자본증권, 해약환급금)
+    # 재무상태표 부채자본 (신종자본증권, 해약환급금, OCI세부)
     b_data = _fetch("SH151" if is_life else "SI147")
     if b_data:
         hyb = b_data.get("F3", 0)
         hyk = b_data.get("F46", 0)
+        f64 = b_data.get("F64", 0)   # Col26 보험계약자산(부채)순금융손익
+        f65 = b_data.get("F65", 0)   # Col27 재보험계약자산(부채)순금융손익
+        f67 = b_data.get("F67", 0)   # Col28 현금흐름위험회피 (생보사만 정확)
+        f69 = b_data.get("F69", 0)   # Col30 확정급여(보험수리적손익)
         if hyb: result[16] = hyb / 1e6
         if hyk: result[99] = hyk / 1e6
+        if f64: result[26] = f64 / 1e6
+        if f65: result[27] = f65 / 1e6
+        if f67 and is_life: result[28] = f67 / 1e6   # 생보사만: 손보사 F67은 기준 불일치
+        if f69: result[30] = f69 / 1e6
 
     return result
 

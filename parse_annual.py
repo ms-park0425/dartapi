@@ -3065,6 +3065,8 @@ def _extract_investment_assets(filepath, total_assets=None):
             result[22] = inv_assets
         if util_rate:
             result[23] = util_rate
+        elif inv_assets and total_assets_doc and total_assets_doc > 0:
+            result[23] = inv_assets / total_assets_doc
         if result:
             return result
 
@@ -3083,24 +3085,20 @@ def _extract_oci_detail(filepath, oci_total=None):
         return {}
 
     def _detect_oci_unit(raw_table_html, table_start_pos, fallback_range=3000):
-        """테이블 단위 감지. 반환: 1=백만원, 1e-6=원(/1e6→백만원), 100=억원(×100→백만원)."""
-        unit_m = re.search(r'단위\s*[:\s]\s*(억원|백만원|원)', raw_table_html)
-        if unit_m:
-            u = unit_m.group(1)
-            if '억원' in u:
-                return 100
-            if '원' in u and '백만' not in u:
-                return 1e-6
+        """테이블 단위 감지. 반환: 1=백만원, 1e-6=원, 1e-3=천원, 100=억원."""
+        def _parse_unit(u):
+            if '억원' in u: return 100
+            if '천원' in u: return 1e-3
+            if '원' in u and '백만' not in u: return 1e-6
             return 1
+        unit_m = re.search(r'단위\s*[:\s]\s*(억원|천원|백만원|원)', raw_table_html)
+        if unit_m:
+            return _parse_unit(unit_m.group(1))
         before = content[max(0, table_start_pos - fallback_range): table_start_pos]
         before_clean = re.sub(r'<[^>]+>', ' ', before)
-        unit_m2 = re.search(r'단위\s*[:\s]\s*(억원|백만원|원)', before_clean)
+        unit_m2 = re.search(r'단위\s*[:\s]\s*(억원|천원|백만원|원)', before_clean)
         if unit_m2:
-            u = unit_m2.group(1)
-            if '억원' in u:
-                return 100
-            if '원' in u and '백만' not in u:
-                return 1e-6
+            return _parse_unit(unit_m2.group(1))
         return 1
 
     table_pattern = re.compile(r'<TABLE[^>]*>(.*?)</TABLE>', re.DOTALL | re.IGNORECASE)
@@ -3216,9 +3214,10 @@ def _extract_oci_detail(filepath, oci_total=None):
         """
         cells = text.split('|')
         # oci_total을 테이블 단위로 변환
-        # unit_factor=1e-6 → 테이블값이 원, oci_total은 백만원 → 테이블기준=oci_total*1e6
         if unit_factor == 1e-6:
             oci_target = oci_total_mm * 1e6
+        elif unit_factor == 1e-3:
+            oci_target = oci_total_mm * 1e3
         elif unit_factor == 100:
             oci_target = oci_total_mm / 100
         else:
@@ -3291,11 +3290,18 @@ def _extract_oci_detail(filepath, oci_total=None):
         pos, best_table_text, best_unit_factor = sections[-1][0]
 
     result = _extract_from_table(best_table_text, col_idx=best_col_idx)
-    # 단위 환산: 테이블이 원(1e-6) 또는 억원(100)이면 백만원으로 변환
+    # 단위 환산: 백만원 기준으로 변환
     if best_unit_factor == 1e-6:
         result = {col: val * 1e-6 for col, val in result.items()}
+    elif best_unit_factor == 1e-3:
+        result = {col: val * 1e-3 for col, val in result.items()}
     elif best_unit_factor == 100:
         result = {col: val * 100 for col, val in result.items()}
+    elif best_unit_factor == 1 and result:
+        # 단위 감지 실패 fallback: 값이 1e9 이상이면 원 단위로 간주
+        max_abs = max(abs(v) for v in result.values())
+        if max_abs >= 1e9:
+            result = {col: val * 1e-6 for col, val in result.items()}
     return {col: val for col, val in result.items() if val != 0}
 
 
@@ -3604,6 +3610,7 @@ def extract_company_data(corp_name, year="2025", report_type="사업보고서", 
             if val is not None:
                 result[col] = val / 1e6
 
+
     def _get_pl(account_id):
         """PL에서 dart_/ifrs-full_ 둘 다 시도"""
         v = pl.get(account_id)
@@ -3623,6 +3630,14 @@ def extract_company_data(corp_name, year="2025", report_type="사업보고서", 
             v2 = _get_pl(id2)
             if v1 or v2:
                 result[col] = (v1 - v2) / 1e6
+
+    # 손보사 반기(2506)는 Col36/Col39=0 (누계 방식 차이로 엑셀에서 0으로 기재)
+    if month == "06" and corp_name in NON_LIFE_COMPANIES:
+        result[36] = 0.0
+        result[37] = 0.0
+        result[38] = 0.0
+        result[39] = 0.0
+        result[40] = 0.0
 
     # Col56: 2-dim (Separate + ReportedAmountMember) context 우선
     fvoci_v = parse_fvoci_oci(xbrl_path, year, ref_date=ref_date, start_date=start_date)
@@ -3684,7 +3699,21 @@ def extract_company_data(corp_name, year="2025", report_type="사업보고서", 
             result[7] = ac_fin / 1e6
     elif sec_ac > 0:
         if sec_ac >= loans_ac:
-            result[7] = sec_ac / 1e6  # 신한라이프: 대출채권(보험계약대출) 제외
+            # 신한라이프 패턴: SecuritiesAC + udf_BS_...OfAssetsAbstract 합산
+            # 단, udf_BS가 있더라도 합산시 총자산의 ~12% 수준일 때만 (대출채권)
+            # udf_BS가 없거나 합산이 총자산 대비 너무 작으면 sec_ac만 사용
+            udf_ac = sum(v for k, v in bs.items()
+                         if k.startswith("dart_udf_BS_") and "OfAssetsAbstract" in k)
+            total_assets = bs.get("ifrs-full_Assets", 0)
+            if udf_ac > 0 and total_assets > 0:
+                combined = sec_ac + udf_ac
+                # 합산 비율이 12.5% 이상이면 합산 (대출채권 포함), 아니면 sec_ac만
+                if combined / total_assets >= 0.125:
+                    result[7] = combined / 1e6
+                else:
+                    result[7] = sec_ac / 1e6
+            else:
+                result[7] = sec_ac / 1e6
         else:
             result[7] = (loans_ac + sec_ac + other_ac) / 1e6
     elif loans_ac > 0:
@@ -3725,14 +3754,9 @@ def extract_company_data(corp_name, year="2025", report_type="사업보고서", 
             col13_val = result.get(13, 0)
             if col13_val > 0:
                 components = parse_insurance_components_from_doc(corp_name, col13_val, year)
-        elif not is_annual:
-            # 분기/반기 보고서: 해당 연도 1Q doc.xml에서 당기말 잔액 테이블 파싱
-            doc_path = _get_q1_doc_path(corp_name, year)
-            if doc_path:
-                bel_q, ra_q, csm_q = _extract_components_from_doc_q1(doc_path)
-                if bel_q is not None:
-                    components = {"BEL": bel_q * 1e6, "RA": (ra_q or 0) * 1e6, "CSM": csm_q * 1e6}
-                    print(f"    doc_q1 BEL/RA/CSM: {bel_q:.0f}/{ra_q:.0f}/{csm_q:.0f} 백만원")
+        # 분기/반기: doc_q1 BEL 사용 안 함
+        # doc_1q_{year}.xml은 실제로 3분기(2509) 보고서라 2503/2506 기준 잔액이 아님
+        # BEL은 분기 XBRL에 태그 없으면 MISS 처리
     if components["CSM"] > 0:
         result[75] = components["CSM"] / 1e6
     if components["BEL"] > 0:
@@ -3837,17 +3861,46 @@ def extract_company_data(corp_name, year="2025", report_type="사업보고서", 
     if 69 not in result and eq_changes.get(69):
         result[69] = eq_changes[69] / 1e6
 
-    # Col38: 금융손익 = Col35 - Col36 - Col37 + Col39 - Col40 (Col37 없으면 0)
-    if all(c in result for c in [35, 36, 39, 40]):
-        result[38] = result[35] - result[36] - result.get(37, 0) + result[39] - result[40]
+    # Col38: 금융손익 = Col35 - Col36 - Col37 + Col39 - Col40
+    # Col39/40 없어도 있는 것만으로 계산 (조건 완화)
+    if 35 in result and 36 in result:
+        result[38] = (result[35] - result[36]
+                      - result.get(37, 0)
+                      + result.get(39, 0)
+                      - result.get(40, 0))
+
+    # Col41: 영업이익 fallback 계산 (XBRL 태그가 없거나 기준 불일치 시)
+    # 엑셀 기준: Col32(보험손익) + Col35(투자손익) + Col36(보험금융) + Col37(재보험금융) - Col39(재산관리비) + Col40(기타투자)
+    if 41 not in result and all(c in result for c in [32, 35]):
+        _op = result[32] + result[35]
+        _op += result.get(36, 0) + result.get(37, 0)
+        _op -= result.get(39, 0)
+        _op += result.get(40, 0)
+        result[41] = _op
+    elif 41 in result and 43 in result:
+        # XBRL Col41이 있어도 계산값이 더 신뢰할 수 있는 경우 교체
+        if all(c in result for c in [32, 35]):
+            _op_calc = result[32] + result[35] + result.get(36, 0) + result.get(37, 0) \
+                       - result.get(39, 0) + result.get(40, 0)
+            _xbrl_41 = result[41]
+            _col43 = result[43]
+            # 조건1: XBRL이 세전이익의 1.5배 초과이면 비정상 → 계산값 사용
+            # 조건2: XBRL과 계산값 차이가 세전이익의 15% 이상이면 계산값이 더 가까운 쪽 선택
+            if abs(_xbrl_41) > abs(_col43) * 1.5 and abs(_op_calc) <= abs(_col43) * 1.5:
+                result[41] = _op_calc
+            elif (abs(_xbrl_41 - _op_calc) > abs(_col43) * 0.15 and
+                  abs(_op_calc - _col43) < abs(_xbrl_41 - _col43)):
+                result[41] = _op_calc
 
     # Col42/Col50 fallback: 영업외손익 = 세전이익 - 영업이익
     if 42 not in result and 43 in result and 41 in result:
         result[42] = result[43] - result[41]
         result[50] = result[42]
 
-    # Col51: 영업손익 합계 = Col48 + Col49 + Col50
-    if any(c in result for c in [48, 49, 50]):
+    # Col51: 영업손익 합계 = Col43(세전손익)과 동일
+    if 43 in result:
+        result[51] = result[43]
+    elif any(c in result for c in [48, 49, 50]):
         result[51] = result.get(48, 0) + result.get(49, 0) + result.get(50, 0)
 
     # OCI 누계 항목 (당기말/전기말 BS 3-dim context)
@@ -3919,7 +3972,8 @@ def extract_company_data(corp_name, year="2025", report_type="사업보고서", 
         # Col99(해약환급금)/Col22(운용자산): FISIS가 XBRL보다 신뢰 → 무조건 덮어씀
         # Col16/74/75: XBRL 없을 때만
         _fisis_always = {22, 99}
-        _fisis_fallback = {16, 74, 75}
+        # Col26/27/28/30(OCI세부): FISIS F64/F65/F67/F69가 정확 → XBRL 없을 때 사용
+        _fisis_fallback = {16, 26, 27, 28, 30, 74, 75}
         _fisis_needed = _fisis_always | {c for c in _fisis_fallback if c not in result or result[c] == 0}
         base_month = f"{year}{month}"
         try:
@@ -3953,9 +4007,10 @@ def extract_company_data(corp_name, year="2025", report_type="사업보고서", 
                 if col not in result or result[col] == 0:
                     result[col] = val
             fisis_bal = fetch_fisis_balance(corp_name, base_month)
-            # Col74/75(RA/CSM)/22(운용자산)/99(해약환급금): FISIS가 더 신뢰 → 무조건 덮어씀
-            # Col16: XBRL 없을 때만
-            _fisis_always_q = {22, 74, 75, 99}
+            # Col74/75(RA/CSM)/22(운용자산): FISIS가 더 신뢰 → 무조건 덮어씀
+            # Col99(해약환급금): 분기는 XBRL에서만 (엑셀이 전년도 연말 확정치 사용)
+            # Col16/26~30: XBRL 없을 때만
+            _fisis_always_q = {22, 74, 75}
             for col, val in fisis_bal.items():
                 if col in _fisis_always_q:
                     if val and val != 0:
@@ -3965,9 +4020,45 @@ def extract_company_data(corp_name, year="2025", report_type="사업보고서", 
         except Exception as _e:
             print(f"    FISIS 조회 실패 ({corp_name} {base_month}): {_e}")
 
+        # 3분기(2509)는 doc_1q_{year}.xml에서 OCI세부/CSM기간별 추출 가능
+        # doc_1q_{year}.xml 실체가 3분기보고서이므로 2509 기준 값이 들어있음
+        if month == "09":
+            _q1_doc = _get_q1_doc_path(corp_name, year)
+            if _q1_doc:
+                # OCI세부 (Col25~30)
+                _oci_doc = _extract_oci_detail(_q1_doc, oci_total=result.get(17))
+                for col, val in _oci_doc.items():
+                    if col not in result or result[col] == 0:
+                        result[col] = val
+                # 손보사 RA/CSM: doc_q1 당기말 잔액 테이블 (FISIS보다 정확)
+                # BEL은 doc_q1 파싱이 회사별로 불안정하므로 제외
+                if corp_name in NON_LIFE_COMPANIES:
+                    _bel_q, _ra_q, _csm_q = _extract_components_from_doc_q1(_q1_doc)
+                    if _ra_q and _ra_q > 0:
+                        result[74] = _ra_q
+                    if _csm_q and _csm_q > 0:
+                        result[75] = _csm_q
+
+                # CSM기간별 (Col83~88): 합계가 CSM의 50~150% 범위일 때만 사용
+                csm_for_mat = result.get(75, 0)
+                if csm_for_mat > 0:
+                    _mat = _extract_csm_maturity(_q1_doc, csm_for_mat)
+                    _mat88 = _mat.get(88, sum(_mat.get(c, 0) for c in (83,84,85,86,87)))
+                    if _mat88 > 0 and 0.5 < _mat88 / csm_for_mat < 1.5:
+                        for col, val in _mat.items():
+                            if col not in result or result[col] == 0:
+                                result[col] = val
+
     # Col99 부호 보정: 해약환급금준비금은 항상 양수
     if 99 in result and result[99] < 0:
         result[99] = abs(result[99])
+
+    # Col23 (자산운용률) fallback: Col22/Col21 직접 계산
+    # 단, doc.xml에서 직접 파싱한 경우(Col21 동시 존재)만 사용 — FISIS Col22/Col4 비율은 기준 달라 제외
+    if 23 not in result and 22 in result and 21 in result and result[21] > 0:
+        # Col21이 doc.xml에서 온 값일 때만 (Col4 총자산과 다른 경우)
+        if abs(result[21] - result.get(4, 0)) > result.get(4, 1) * 0.01:
+            result[23] = result[22] / result[21]
 
     # 계리적 가정 변경 민감도 분석 (Col146~158) — XBRL 기반, 분기/반기/사업보고서 모두 시도
     actuarial = parse_actuarial_sensitivity(xbrl_path, year, ref_date=ref_date, start_date=start_date)
