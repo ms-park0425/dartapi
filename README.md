@@ -41,6 +41,70 @@ FISIS_API_KEY = "your_api_key_here"
 
 ---
 
+## XBRL 파일 구조
+
+XBRL 파일은 크게 두 부분으로 나뉩니다.
+
+**① 상단 — context 정의 블록**: "이 숫자가 어떤 조건의 값인가"를 정의합니다.
+
+```xml
+<context id="CFY2025eFY_Separate_IssuedMember">
+  <entity><identifier>00108465</identifier></entity>
+  <period>
+    <startDate>2025-01-01</startDate>
+    <endDate>2025-12-31</endDate>
+  </period>
+  <scenario>
+    <xbrldi:explicitMember dimension="ConsolidatedAndSeparateFinancialStatementsAxis">
+      ifrs-full:SeparateMember
+    </xbrldi:explicitMember>
+    <xbrldi:explicitMember dimension="DisaggregationOfInsuranceContractsAxis">
+      ifrs-full:InsuranceContractsIssuedMember
+    </xbrldi:explicitMember>
+  </scenario>
+</context>
+```
+
+> `dimension`이 필터 종류, 그 안의 값이 필터 조건입니다. 이 필터 묶음을 **dim**이라 부릅니다.
+
+**② 하단 — 값 태그**: `contextRef`로 위의 context를 참조해 실제 숫자를 저장합니다.
+
+```xml
+<ifrs-full:ContractualServiceMargin
+  contextRef="CFY2025eFY_Separate_IssuedMember"
+  decimals="-6">13217874000000</ifrs-full:ContractualServiceMargin>
+```
+
+> `contextRef`가 가리키는 context id의 조건(별도 재무제표, 발행계약 전체)에 해당하는  
+> CSM 잔액이 **13,217,874,000,000원** 이라는 뜻입니다.
+
+스크립트는 context id 문자열을 직접 매칭하지 않고, **각 context 안의 dimension 목록을 읽어 조건을 확인**합니다.  
+회사마다 id 문자열이 달라도 dimension 조건이 같으면 동일하게 처리됩니다.
+
+### XBRL Taxonomy
+
+`data/taxonomy.csv` — XBRL 태그 ID와 한글명 매핑표. 각 회사 XBRL 다운로드 시 포함된 `*_lab-ko.xml`에서 자동 추출됩니다.
+
+| 분류 | prefix | 개수 | 설명 |
+|------|--------|-----:|------|
+| IFRS 표준 | `ifrs-full_` | 1,562 | IASB가 정의한 국제 표준 태그 |
+| DART 한국 추가 | `dart_` | 967 | 금융감독원 보험업 특화 추가 정의 |
+| 회사별 커스텀 | `entity{corp_code}_` | 10,844 | 각 회사가 자체 정의한 태그 (비표준, 다른 회사/연도에 미적용) |
+
+**주요 활용 태그:**
+
+| 항목 | 태그 |
+|------|------|
+| 총자산 | `ifrs-full_Assets` |
+| 보험계약부채 | `ifrs-full_InsuranceContractsIssuedThatAreLiabilities` |
+| 보험손익 | `ifrs-full_InsuranceServiceResult` |
+| 당기순이익 | `ifrs-full_ProfitLoss` |
+| 보험금융손익 | `dart_InsuranceFinanceIncomeFromInsuranceContractsIssuedRecognisedInProfitOrLoss` |
+| 신종자본증권 | `dart_HybridBonds` |
+| 보험계약마진(CSM) | `dart_ContractualServiceMargin` 등 |
+
+---
+
 ## 전체 정확도 요약
 
 정답 데이터(`202512_동업사 공시비교_DATA_작업_260320.xlsx`)와 비교한 결과입니다.  
@@ -453,18 +517,6 @@ XBRL이 아닌 보고서 원문(document.xml)에서 파싱하는 항목은 회�
 |-----|------|------|------|
 | 146~150 | BEL+RA기준 (해지율·위험률·사업비·기타·물량) | XBRL → 원문XML | ⚠️ 동양·삼성화재 MISS, 한화 부호오류 |
 | 153~158 | CSM기준 (해지율~손실요소) | XBRL → 원문XML | ⚠️ 동양·삼성화재 MISS |
-
----
-
-## XBRL Taxonomy
-
-`data/taxonomy.csv` — XBRL 태그 ID와 한글명 매핑표.
-
-| 분류 | prefix | 개수 | 설명 |
-|------|--------|-----:|------|
-| IFRS 표준 | `ifrs-full_` | 1,562 | IASB 정의 국제 표준 태그 |
-| DART 한국 추가 | `dart_` | 967 | 금융감독원 보험업 특화 추가 태그 |
-| 회사별 커스텀 | `entity{corp_code}_` | 10,844 | 각 회사 자체 정의 태그 |
 
 ---
 
