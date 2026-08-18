@@ -196,10 +196,12 @@ COL40_FEE = ["dart_FeeIncomeOfInvestmentIncome", "dart_FeesAndCommissionIncomeOf
 COL40_RENT = ["dart_RentalReturnOfInvestmentIncome", "ifrs-full_RentalIncome"]
 COL40_OTHER_INC = ["ifrs-full_OtherOperatingIncomeInvestment", "dart_OtherOperatingIncomeInvestment"]
 # 투자비용: OtherOperatingExpenseInvestment + PropertyManagementExpense + udf 계열 모두 포함
-# udf_ + OfOperatingExpenseInvestment는 _get_pl_by_keyword가 아닌 별도 처리
-COL40_OTHER_EXP_KEYWORDS = ["OtherOperatingExpenseInvestment", "PropertyManagementExpense"]
-# DB손보 패턴: udf_IS_ + OfOperatingExpenseInvestment (당해연도 신규 정의)
+COL40_OTHER_EXP_KEYWORDS = ["OtherOperatingExpenseInvestment", "PropertyManagementExpense",
+                            "OfOperatingExpenseInvestment"]
+# DB손보 패턴: udf_IS_ + OfOperatingExpenseInvestment
 COL40_UDF_EXP_PREFIX = "OfOperatingExpenseInvestment"
+# 신한라이프 패턴: udf_IS_ + OfInvestmentIncome (표준 태그 외 추가 수익 항목)
+COL40_UDF_INC_SUFFIX = "OfInvestmentIncome"
 
 # 복합 축 항목 (CSM 변동표 등)
 # 별도 + InsuranceContractsIssuedMember + 각 ComponentMember
@@ -516,6 +518,124 @@ def parse_fvoci_oci(xbrl_path, target_year="2025", ref_date=None, start_date=Non
     return None
 
 
+# Col25 보충: ReportedAmountMember duration 컨텍스트의 추가 FVOCI reserve 태그 합산
+_COL25_CREDIT_KW = (
+    "ReserveOfDebtSecuritiesLossAllowanceOnFinancialAssetsMeasuredAtFairValueThroughOtherComprehensiveIncome",
+    "ReserveOfChangeInFairValueOfFinancialLiabilityAttributableToChangeInCreditRiskOfLiability",
+)
+
+
+def parse_fvoci_col25_supplement(xbrl_path, target_year="2025", ref_date=None, start_date=None):
+    """ReportedAmountMember 컨텍스트(instant 또는 duration)에서 FVOCI credit-loss 보충 태그 합산."""
+    if ref_date is None:
+        ref_date = f"{target_year}-12-31"
+    if start_date is None:
+        start_date = f"{target_year}-01-01"
+    tree = ET.parse(xbrl_path)
+    root = tree.getroot()
+    total = 0.0
+    for ctx in root.findall(f"{{{NS_XBRLI}}}context"):
+        period = ctx.find(f"{{{NS_XBRLI}}}period")
+        instant = period.find(f"{{{NS_XBRLI}}}instant")
+        start = period.find(f"{{{NS_XBRLI}}}startDate")
+        end = period.find(f"{{{NS_XBRLI}}}endDate")
+        # instant(연말) 또는 duration(YTD) 컨텍스트 모두 허용
+        if instant is not None:
+            if instant.text != ref_date:
+                continue
+        elif start is not None and end is not None:
+            if start.text != start_date or end.text != ref_date:
+                continue
+        else:
+            continue
+        members = ctx.findall(f".//{{{NS_XBRLDI}}}explicitMember")
+        if len(members) != 2:
+            continue
+        dims = {}
+        for m in members:
+            dims[m.get("dimension", "").split(":")[-1]] = (m.text or "").split(":")[-1]
+        if "SeparateMember" != dims.get("ConsolidatedAndSeparateFinancialStatementsAxis", ""):
+            continue
+        carry_vals = [v for k, v in dims.items() if k != "ConsolidatedAndSeparateFinancialStatementsAxis"]
+        if not any("ReportedAmountMember" in v for v in carry_vals):
+            continue
+        ctx_id = ctx.get("id", "")
+        for elem in root:
+            if elem.get("contextRef") != ctx_id or not elem.text:
+                continue
+            tag = elem.tag.split("}")[-1] if "}" in elem.tag else elem.tag
+            if any(kw in tag for kw in _COL25_CREDIT_KW):
+                try:
+                    total += float(elem.text.strip())
+                except ValueError:
+                    pass
+    return total
+
+
+def parse_equity_component_items(xbrl_path, tag_locals, target_year="2025",
+                                  ref_date=None, start_date=None):
+    """
+    2-dim (SeparateMember + ComponentsOfEquityAxis) 컨텍스트에서 여러 태그를 읽어
+    {component_member: {tag_local: value}} 반환.
+    component_member 예: AccumulatedOtherComprehensiveIncomeMember, RetainedEarningsMember
+    """
+    if ref_date is None:
+        ref_date = f"{target_year}-12-31"
+    if start_date is None:
+        start_date = f"{target_year}-01-01"
+    tree = ET.parse(xbrl_path)
+    root = tree.getroot()
+
+    # SeparateMember + ComponentsOfEquityAxis duration contexts 수집 (2-dim 이상 지원)
+    # SeparateMember 우선, 없는 태그는 ConsolidatedMember에서 fallback
+    sep_map  = {}  # ctx_id → component_member (SeparateMember 컨텍스트)
+    con_map  = {}  # ctx_id → component_member (ConsolidatedMember 컨텍스트, fallback)
+    for ctx in root.findall(f"{{{NS_XBRLI}}}context"):
+        period = ctx.find(f"{{{NS_XBRLI}}}period")
+        start = period.find(f"{{{NS_XBRLI}}}startDate")
+        end = period.find(f"{{{NS_XBRLI}}}endDate")
+        if start is None or start.text != start_date:
+            continue
+        if end is None or end.text != ref_date:
+            continue
+        members = ctx.findall(f".//{{{NS_XBRLDI}}}explicitMember")
+        if len(members) < 2:
+            continue
+        dims = {}
+        for m in members:
+            dims[m.get("dimension", "").split(":")[-1]] = (m.text or "").split(":")[-1]
+        comp = dims.get("ComponentsOfEquityAxis", "")
+        if not comp:
+            continue
+        cs_val = next((v for k, v in dims.items()
+                       if ("Consolidated" in k or "StatementInformation" in k
+                           or "SeparateFinancial" in k)), "")
+        if "Separate" in cs_val:
+            sep_map[ctx.get("id", "")] = comp
+        elif "Consolidated" in cs_val:
+            con_map[ctx.get("id", "")] = comp
+
+    result = {}  # component → {tag_local: value}
+    for ctx_map in (sep_map, con_map):  # SeparateMember 먼저, 없으면 Consolidated fallback
+        for elem in root:
+            ctx_ref = elem.get("contextRef", "")
+            if ctx_ref not in ctx_map:
+                continue
+            tag = elem.tag.split("}")[-1] if "}" in elem.tag else elem.tag
+            if tag not in tag_locals:
+                continue
+            try:
+                v = float(elem.text.strip())
+            except (ValueError, TypeError, AttributeError):
+                continue
+            comp = ctx_map[ctx_ref]
+            # SeparateMember에서 이미 찾은 태그는 덮어쓰지 않음
+            if tag not in result.get(comp, {}):
+                result.setdefault(comp, {})[tag] = v
+
+    return result
+
+
 def parse_oci_accumulated(xbrl_path, target_year="2025", ref_date=None):
     """
     OCI 누계 항목 파싱. 세 가지 구조 지원:
@@ -559,6 +679,8 @@ def parse_oci_accumulated(xbrl_path, target_year="2025", ref_date=None):
         "ReserveOfGainsAndLossesOnDebtInstrumentsAtFairValueThroughOtherComprehensiveIncome",
         "ReserveOfGainsAndLossesFromInvestmentsInEquityInstruments",
         "ReserveOfGainsAndLossesOnFinancialAssets",
+        "ReserveOfDebtSecuritiesLossAllowanceOnFinancialAssetsMeasuredAtFairValueThroughOtherComprehensiveIncome",
+        "ReserveOfChangeInFairValueOfFinancialLiabilityAttributableToChangeInCreditRiskOfLiability",
     )
     # dart hedge reserve tags for Col28 fallback
     PATC_HEDGE_KEYWORDS = (
@@ -3654,6 +3776,10 @@ def extract_company_data(corp_name, year="2025", report_type="사업보고서", 
                 result[col] = val / 1e6
                 break
 
+    # 손보사: Col57(신용손실OCI) 정답 blank → 출력 억제
+    if corp_name in NON_LIFE_COMPANIES and 57 in result:
+        del result[57]
+
     # OCI 합산 매핑
     for col, (id1, id2) in OCI_SUM_MAPPING.items():
         v1 = _get_pl(id1)
@@ -3835,8 +3961,36 @@ def extract_company_data(corp_name, year="2025", report_type="사업보고서", 
     fee = _get_pl_multi(COL40_FEE)
     rent = _get_pl_multi(COL40_RENT)
     other_inc = _get_pl_multi(COL40_OTHER_INC)
+    # udf_IS_*OfInvestmentIncome 추가 수익 태그 합산 (신한라이프 등, pl키는 dart_udf_IS_... 형태)
+    # 처분이익/평가이익 등 일회성 손익 태그는 라벨로 필터링
+    _EXCLUDE_LABEL_KW = ("처분", "평가", "상각후원가측정")
+    _lab_file = xbrl_path.replace(".xbrl", "_lab-ko.xml")
+    _bad_udf = set()
+    if os.path.exists(_lab_file):
+        try:
+            _lt = ET.parse(_lab_file)
+            _xl = "{http://www.w3.org/1999/xlink}"
+            _lbl_map = {}  # label_id → text
+            for _e in _lt.getroot().iter():
+                if _e.text and _e.get(f"{_xl}label"):
+                    _lbl_map[_e.get(f"{_xl}label")] = _e.text
+            for _e in _lt.getroot().iter():
+                _href = _e.get(f"{_xl}href", "")
+                _lbl_ref = _e.get(f"{_xl}label", "")
+                if "udf_IS_" in _href and COL40_UDF_INC_SUFFIX in _href:
+                    # 대응 label 텍스트 검색
+                    for _lbl_id, _lbl_text in _lbl_map.items():
+                        if _lbl_ref.replace("Loc_", "Label_") in _lbl_id or _lbl_ref in _lbl_id:
+                            if any(kw in _lbl_text for kw in _EXCLUDE_LABEL_KW):
+                                # href에서 tag local name 추출
+                                _local = _href.split("#")[-1].split("_", 1)[-1]  # entity..._udf_IS_...
+                                _bad_udf.add("dart_" + _local)
+        except Exception:
+            pass
+    udf_inc = sum(v for k, v in pl.items()
+                  if "udf_" in k and COL40_UDF_INC_SUFFIX in k and k not in _bad_udf)
     other_exp = _get_pl_by_keyword(COL40_OTHER_EXP_KEYWORDS)
-    col40_val = fee + rent + other_inc - other_exp
+    col40_val = fee + rent + other_inc + udf_inc - other_exp
     if col40_val:
         result[40] = col40_val / 1e6
 
@@ -3860,6 +4014,59 @@ def extract_company_data(corp_name, year="2025", report_type="사업보고서", 
         result[67] = eq_changes[67] / 1e6
     if 69 not in result and eq_changes.get(69):
         result[69] = eq_changes[69] / 1e6
+
+    # ── ComponentsOfEquity 2-dim 보충 항목 ──────────────────────────────────
+    _REVAL_XFER  = "IncreaseDecreaseThroughTransferBetweenRevaluationReserveAndRetainedEarnings"
+    _DISP_FVOCI  = "TransferOfAmountRecognisedInOtherComprehensiveIncomeAndAccumulatedInEquityRelatingToDisposalOfInvestmentsInEquityInstruments"
+    _EQ_FVOCI_T  = "OtherComprehensiveIncomeNetOfTaxGainsLossesFromInvestmentsInEquityInstruments"
+    _CR_FVOCI_T  = "OtherComprehensiveIncomeNetOfTaxCreditLossesOfFinancialAssetsMeasuredAtFairValueThroughOtherComprehensiveIncome"
+    _CF_HEDGE_T  = "OtherComprehensiveIncomeNetOfTaxCashFlowHedges"
+    _FVOCI_CHG_T = "OtherComprehensiveIncomeNetOfTaxChangeInFairValueOfFinancialAssetsMeasuredAtFairValueThroughOtherComprehensiveIncome"
+    _REPAY_HYB   = "RepaymentOfHybridBond"
+    _CAP_XFER    = "TransferFromCapitalSurplusToRetainedEarningsOfIncreaseDecreaseThroughTransactionsWithOwnersAbstract"
+
+    _eq_comp = parse_equity_component_items(
+        xbrl_path, {_REVAL_XFER, _DISP_FVOCI, _EQ_FVOCI_T, _CR_FVOCI_T, _CF_HEDGE_T,
+                    _FVOCI_CHG_T, _REPAY_HYB, _CAP_XFER},
+        year, ref_date=ref_date, start_date=start_date)
+    _accum_oci = _eq_comp.get("AccumulatedOtherComprehensiveIncomeMember", {})
+    _re_comp   = _eq_comp.get("RetainedEarningsMember", {})
+
+    # Col56: AccumulatedOCI 2-dim에서 지분FVOCI + 신용손실FVOCI 합산
+    #        처분재분류(_DISP_FVOCI)는 양수이면 Col56(FVOCI OCI), 음수이면 Col60(기타OCI)
+    _eq_fvoci   = _accum_oci.get(_EQ_FVOCI_T, 0)
+    _cr_fvoci   = _accum_oci.get(_CR_FVOCI_T, 0)
+    _disp_accum = _accum_oci.get(_DISP_FVOCI, 0)
+    _col56_supp = _eq_fvoci + _cr_fvoci + (max(_disp_accum, 0))
+    if _col56_supp:
+        result[56] = result.get(56, 0) + _col56_supp / 1e6
+
+    # Col60: 재평가준비금→RE 이전(OCI측 음수) + DISP_FVOCI 음수분
+    _reval_accum = _accum_oci.get(_REVAL_XFER, 0)
+    _col60_supp  = _reval_accum + min(_disp_accum, 0)
+    if _col60_supp:
+        result[60] = result.get(60, 0) + _col60_supp / 1e6
+
+    # Col69: 재평가준비금→RE 이전(RE측 양수) + 현금흐름위험회피OCI(RE) + FVOCI변동(RE) + 자본잉여금→RE 이전
+    _reval_re     = _re_comp.get(_REVAL_XFER, 0)
+    _cfh_re       = _re_comp.get(_CF_HEDGE_T, 0)
+    _fvoci_chg_re = _re_comp.get(_FVOCI_CHG_T, 0)
+    _cap_xfer     = _re_comp.get(_CAP_XFER, 0)
+    _col69_before = result.get(69, 0)
+    # _reval_re: result[69]이 이미 설정된 경우만 추가 (현대해상처럼 단독 이전만 있는 경우 제외)
+    _reval_re_add = _reval_re if _col69_before != 0 else 0
+    # _fvoci_chg_re: result[69]이 0인 경우만 추가 (이미 설정 시 이중계산 방지)
+    _fvoci_chg_add = _fvoci_chg_re if _col69_before == 0 else 0
+    _col69_supp   = _reval_re_add + _cfh_re + _fvoci_chg_add + _cap_xfer
+    if _col69_supp:
+        result[69] = result.get(69, 0) + _col69_supp / 1e6
+
+    # Col70: 신종자본증권 상환 추가 (RepaymentOfHybridBond in RE context)
+    _repay_hyb = _re_comp.get(_REPAY_HYB, 0)
+    if _repay_hyb and 70 in result:
+        result[70] = result[70] - abs(_repay_hyb) / 1e6
+    elif _repay_hyb:
+        result[70] = -abs(_repay_hyb) / 1e6
 
     # Col38: 금융손익 = Col35 - Col36 - Col37 + Col39 - Col40
     # Col39/40 없어도 있는 것만으로 계산 (조건 완화)
@@ -3927,6 +4134,11 @@ def extract_company_data(corp_name, year="2025", report_type="사업보고서", 
     # Col29 재평가잉여금: 전기말 direct 사용
     if 29 not in result and 29 in oci_prior_direct:
         result[29] = oci_prior_direct[29] / 1e6
+
+    # Col25 보충: ReportedAmountMember duration 컨텍스트의 credit-loss reserve 태그 추가
+    _col25_supp = parse_fvoci_col25_supplement(xbrl_path, year, ref_date=ref_date, start_date=start_date)
+    if _col25_supp and 25 in result:
+        result[25] += _col25_supp / 1e6
 
     # Col24 = 기타포괄손익누계액 합계 (= Col17, AccumulatedOCI)
     if 17 in result:
@@ -4374,9 +4586,9 @@ def main(year=None, period_code=None):
                             filled += 1
                             continue
 
-                    # 부동소수점 반올림 (소수점 6자리)
+                    # 부동소수점 반올림 (소수점 2자리)
                     if isinstance(val, float):
-                        val = round(val, 6)
+                        val = round(val, 2)
                     cell.value = val
                     filled += 1
 

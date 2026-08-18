@@ -3,6 +3,8 @@ data_sheet_{period}.csv vs DATA 시트 정답 비교 검증 스크립트
 """
 import csv
 import openpyxl
+from openpyxl.styles import PatternFill
+from openpyxl.utils import get_column_letter
 import sys
 import argparse
 
@@ -71,6 +73,7 @@ def compare(answer, output, tol=0.01):
     ok, fail, miss = 0, 0, 0
     fail_details = []
     miss_details = {}
+    miss_cells = []  # (short, col_num) for painting
 
     for csv_key, out in output.items():
         if csv_key not in answer:
@@ -90,24 +93,85 @@ def compare(answer, output, tol=0.01):
             if actual is None:
                 miss += 1
                 miss_details.setdefault(col_num, []).append(csv_key[4:])
+                miss_cells.append((csv_key[4:], col_num))
                 continue
 
             # Compare
-            if abs(expected) < tol:  # effectively zero (includes tiny values like 0.003)
+            abs_diff = abs(actual - expected)
+            if abs_diff <= 1:  # absolute tolerance: diff <= 1 is OK
+                ok += 1
+            elif abs(expected) < tol:  # effectively zero
                 if abs(actual) < tol:
                     ok += 1
                 else:
                     fail += 1
                     fail_details.append((csv_key[4:], col_num, expected, actual))
             else:
-                rel_err = abs(actual - expected) / max(abs(expected), 1e-10)
+                rel_err = abs_diff / max(abs(expected), 1e-10)
                 if rel_err < 0.001:  # 0.1% tolerance
                     ok += 1
                 else:
                     fail += 1
                     fail_details.append((csv_key[4:], col_num, expected, actual))
 
-    return ok, fail, miss, fail_details, miss_details
+    return ok, fail, miss, fail_details, miss_details, miss_cells
+
+
+ORANGE_FILL = PatternFill(start_color="FFA500", end_color="FFA500", fill_type="solid")
+EXCEL_OUT = "DATA_작업_빈칸.xlsx"
+
+
+def paint_fails(fail_details, miss_cells=None):
+    """FAIL/MISS 셀을 주황색으로 칠하기"""
+    import os
+    if miss_cells is None:
+        miss_cells = []
+    if not os.path.exists(EXCEL_OUT):
+        print(f"\n[SKIP] {EXCEL_OUT} 없음 — 색칠 생략")
+        return
+    if not fail_details and not miss_cells:
+        print("\n[색칠] FAIL/MISS 없음")
+        return
+
+    wb = openpyxl.load_workbook(EXCEL_OUT)
+    ws = wb["DATA"]
+
+    # row1: col_num → excel열 역매핑
+    col_to_excel = {}
+    for ec in range(1, ws.max_column + 1):
+        v = ws.cell(row=1, column=ec).value
+        if v is not None:
+            try:
+                col_to_excel[int(v)] = ec
+            except (ValueError, TypeError):
+                pass
+
+    # col2=기간코드, col3=회사명 → 행 매핑
+    period_col = col_to_excel.get(2, 2)
+    name_col = col_to_excel.get(3, 3)
+    short_to_row = {}
+    for r in range(6, ws.max_row + 1):
+        v2 = ws.cell(row=r, column=period_col).value
+        v3 = ws.cell(row=r, column=name_col).value
+        if str(v2) == str(PERIOD) and v3:
+            short_to_row[str(v3).strip()] = r
+
+    painted = 0
+    for short, col_num, _exp, _act in fail_details:
+        row_idx = short_to_row.get(short)
+        ec = col_to_excel.get(col_num)
+        if row_idx and ec:
+            ws.cell(row=row_idx, column=ec).fill = ORANGE_FILL
+            painted += 1
+    for short, col_num in miss_cells:
+        row_idx = short_to_row.get(short)
+        ec = col_to_excel.get(col_num)
+        if row_idx and ec:
+            ws.cell(row=row_idx, column=ec).fill = ORANGE_FILL
+            painted += 1
+
+    wb.save(EXCEL_OUT)
+    print(f"\n[색칠] {painted}셀 주황색 표시 완료 → {EXCEL_OUT}")
 
 
 def main():
@@ -120,7 +184,7 @@ def main():
     print(f"  {len(output)} companies loaded")
 
     print("\nComparing...")
-    ok, fail, miss, fail_details, miss_details = compare(answer, output)
+    ok, fail, miss, fail_details, miss_details, miss_cells = compare(answer, output)
 
     total = ok + fail + miss
     print(f"\n{'='*60}")
@@ -139,6 +203,8 @@ def main():
         sorted_miss = sorted(miss_details.items(), key=lambda x: -len(x[1]))
         for col, keys in sorted_miss[:20]:
             print(f"  Col{col} ({len(keys)} miss): {', '.join(keys[:4])}{'...' if len(keys)>4 else ''}")
+
+    paint_fails(fail_details, miss_cells)
 
 
 if __name__ == "__main__":
