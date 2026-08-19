@@ -518,6 +518,153 @@ def parse_fvoci_oci(xbrl_path, target_year="2025", ref_date=None, start_date=Non
     return None
 
 
+def parse_csm_maturity_xbrl(xbrl_path, target_year="2025", ref_date=None):
+    """XBRL MaturityAxis에서 CSM 기간별 기대수익인식금액 추출.
+    반환: {83: 1년이하, 84: 1~3년, 85: 3~5년, 86: 5~10년, 87: 10년초과} or {}
+    단위: 백만원
+    """
+    try:
+        tree = ET.parse(xbrl_path)
+    except Exception:
+        return {}
+    root = tree.getroot()
+    if ref_date is None:
+        ref_date = f"{target_year}-12-31"
+
+    # Word-to-number mapping (case-insensitive via .lower())
+    _W2N = {
+        'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
+        'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10,
+        'eleven': 11, 'twelve': 12, 'thirteen': 13, 'fourteen': 14,
+        'fifteen': 15, 'twenty': 20, 'twentyfive': 25, 'thirty': 30,
+        'tenbentyfive': 25,
+    }
+
+    def _w2n(tok):
+        """Convert word or digit string to int year."""
+        if tok.isdigit():
+            return int(tok)
+        return _W2N.get(tok)
+
+    def _parse_member(m):
+        """Parse maturity member name -> (start_yr, end_yr or None)."""
+        # Strip long entity-specific suffix like 'OfAggregated...'
+        m = re.sub(r'OfAggregated.*|OfDisclosure.*|OfDetail.*|OfOne.*|OfInformation.*', '', m)
+        m = re.sub(r'Member$', '', m)
+        lm = m.lower()
+        # NotLaterThanXYears → (0, X)
+        nm = re.match(r'notlatert[h]?an(\w+?)years?$', lm)
+        if nm:
+            e = _w2n(nm.group(1))
+            return (0, e) if e else None
+        # LaterThanXYearsAndNotLaterThanYYears / OverXYearsButWithinYYears → (X, Y)
+        bm = re.match(r'(?:latert[h]?an|over)(\w+?)years?(?:andnotlatert[h]?an|butwithin)(\w+?)years?$', lm)
+        if bm:
+            s, e = _w2n(bm.group(1)), _w2n(bm.group(2))
+            return (s, e) if s and e else None
+        # LaterThanXYears / OverXYears (open-ended) → (X, None)
+        om = re.match(r'(?:latert[h]?an|over)(\w+?)years?$', lm)
+        if om:
+            s = _w2n(om.group(1))
+            return (s, None) if s else None
+        # WithinXYears → (0, X)
+        wm = re.match(r'within(\w+?)years?$', lm)
+        if wm:
+            e = _w2n(wm.group(1))
+            return (0, e) if e else None
+        return None
+
+    # Collect eFY contexts: SeparateMember + IssuedMember + MaturityAxis only (no extra product dims)
+    ctx_mat = {}
+    for ctx in root.iter('{http://www.xbrl.org/2003/instance}context'):
+        ctx_id = ctx.get('id', '')
+        instant = ctx.find('.//{http://www.xbrl.org/2003/instance}instant')
+        end_el = ctx.find('.//{http://www.xbrl.org/2003/instance}endDate')
+        period_ok = (
+            (instant is not None and instant.text and ref_date in instant.text) or
+            (end_el is not None and end_el.text and ref_date in end_el.text)
+        )
+        if not period_ok:
+            continue
+        dims = {}
+        for m in ctx.iter('{http://xbrl.org/2006/xbrldi}explicitMember'):
+            dims[m.get('dimension', '').split(':')[-1]] = (m.text or '').strip().split(':')[-1]
+        if 'MaturityAxis' not in dims:
+            continue
+        if not any('Separate' in v for v in dims.values()):
+            continue
+        if not any('IssuedMember' in v for v in dims.values()):
+            continue
+        if len(dims) != 3:  # only Separate + Issued + Maturity → no product breakdowns
+            continue
+        ctx_mat[ctx_id] = dims['MaturityAxis']
+
+    if not ctx_mat:
+        return {}
+
+    # Collect ContractualServiceMargin values per maturity member
+    mat_vals = {}
+    for elem in root:
+        if 'ContractualServiceMargin' not in elem.tag:
+            continue
+        cr = elem.get('contextRef', '')
+        if cr not in ctx_mat:
+            continue
+        try:
+            v = float(elem.text or 0)
+        except ValueError:
+            continue
+        dec = int(elem.get('decimals', '0'))
+        v = v / (10 ** abs(dec)) if dec < 0 else v / 1e6
+        member = ctx_mat[cr]
+        mat_vals[member] = mat_vals.get(member, 0) + v
+
+    if not mat_vals:
+        return {}
+
+    # Parse and assign each member to Col83-87
+    buckets = {83: 0.0, 84: 0.0, 85: 0.0, 86: 0.0, 87: 0.0}
+    assigned = set()
+    for member, val in mat_vals.items():
+        parsed = _parse_member(member)
+        if parsed is None:
+            continue
+        start, end = parsed
+        if end is not None:
+            mid = (start + end) / 2.0
+        else:
+            mid = start + 0.5  # open-ended: use just above start
+
+        if end is not None and end <= 1:
+            col = 83
+        elif end is not None and start >= 1 and end <= 3:
+            col = 84
+        elif end is not None and start >= 3 and end <= 5:
+            col = 85
+        elif end is not None and start >= 5 and end <= 10:
+            col = 86
+        elif start >= 10:
+            col = 87
+        elif start == 5 and end is None:
+            # Open-ended 5yr+ (e.g. Samsung Life): only assign to 86 if no finer 5-10yr buckets
+            col = 86
+        elif start > 5 and end is None:
+            col = 87
+        else:
+            continue  # ambiguous
+        buckets[col] += val
+        assigned.add(col)
+
+    if not assigned:
+        return {}
+
+    result = {}
+    for col in (83, 84, 85, 86, 87):
+        if buckets[col] > 0:
+            result[col] = round(buckets[col], 2)
+    return result
+
+
 # Col25 보충: ReportedAmountMember duration 컨텍스트의 추가 FVOCI reserve 태그 합산
 _COL25_CREDIT_KW = (
     "ReserveOfDebtSecuritiesLossAllowanceOnFinancialAssetsMeasuredAtFairValueThroughOtherComprehensiveIncome",
@@ -2633,7 +2780,8 @@ def _extract_csm_maturity(filepath, csm_total):
     # 테이블 앞 2000자 문맥에서 CSM 기간별 설명이 있는지 확인하는 키워드
     CSM_MATURITY_CONTEXT_KWS = ('보험계약마진이 미래에', '예상 당기손익 인식기간', '기대수익인식금액',
                                   '보험계약마진의 예상', '기간별 기대수익', '기간별 예상수익',
-                                  '기간별 예상상각', '보험계약마진의 향후')
+                                  '기간별 예상상각', '보험계약마진의 향후',
+                                  '기대상각기간별', '기대 상각기간별', 'CSM 상각')
     candidates = []
     for m in table_pattern.finditer(content):
         text = re.sub(r'<[^>]+>', '|', m.group(1))
@@ -2701,7 +2849,11 @@ def _extract_csm_maturity(filepath, csm_total):
         cells = text.split('|')
         for i, cell in enumerate(cells):
             cs = cell.strip()
-            is_total_row = (cs in ('원수보험계약', '합계', '합 계', '소 계', '발행한 보험계약') or
+            _nxt = cells[i+1].strip() if i+1 < len(cells) else ''
+            _nxt_is_num = bool(_nxt and not any(c.isalpha() for c in _nxt))
+            is_total_row = (cs in ('원수보험계약', '합계', '합 계', '소 계', '발행한 보험계약',
+                                   '당기손익인식 예상액') or
+                            (cs == '보험계약' and _nxt_is_num) or
                             ('보험계약마진' in cs and '출재' not in cs and '재보험' not in cs))
             if not is_total_row:
                 continue
@@ -2720,98 +2872,37 @@ def _extract_csm_maturity(filepath, csm_total):
 
     best, best_err = None, float('inf')
     for ti, (pos, text) in enumerate(target_section):
-        t = _get_total(text)
+        t_raw = _get_total(text)
+        # Detect unit factor for this table (원 단위면 /1e6, 억원이면 ×100)
+        _ctx = re.sub(r'<[^>]+>', ' ', content[max(0, pos-500):pos])
+        _uf = 1
+        if '단위 : 원' in _ctx or '단위:원' in _ctx or '(단위: 원)' in _ctx or '단위 : 원)' in _ctx:
+            _uf = 1e-6
+        elif '단위 : 억원' in _ctx or '(단위: 억원)' in _ctx:
+            _uf = 100
+        t = t_raw * _uf
         err = abs(t - csm_total)
         if err < best_err:
             best_err = err
             best = ti
 
-    if best is None or best_err > csm_total * 0.02:
+    if best is None or best_err > max(csm_total * 0.03, 1):
         return {}
 
     text = target_section[best][1]
+    target_pos = target_section[best][0]
     cells = text.split('|')
 
-    # Detect header bucket structure from table text
-    header = text[:600]
+    # Detect unit factor from context before the table
+    _before_tbl = re.sub(r'<[^>]+>', ' ', content[max(0, target_pos-500):target_pos])
+    _pa_unit = 1
+    if '단위 : 원' in _before_tbl or '단위:원' in _before_tbl or '(단위: 원)' in _before_tbl or '단위 : 원)' in _before_tbl:
+        _pa_unit = 1e-6
+    elif '단위 : 억원' in _before_tbl or '(단위: 억원)' in _before_tbl:
+        _pa_unit = 100
 
-    # Collect header bucket labels (year ranges)
-    year_buckets = re.findall(r'(\d+)년\s*(?:초과\s*)?(\d+)년\s*이내', header)
-    fine_buckets = len(year_buckets) >= 8  # 동양/DB style: many fine buckets
-
-    # 헤더에 연도 범위 레이블이 있을 때만 패턴A 적용 (없으면 패턴B로)
-    has_bucket_header = bool(re.search(r'\d+년\s*이하|\d+년\s*초과|\d+년\s*이내|\d+년\s*[~～]\s*\d+년', header))
-
-    # Find data row (원수보험계약 or 보험계약마진 합산 row)
-    if has_bucket_header:
-        for i, cell in enumerate(cells):
-            cs = cell.strip()
-            is_data_row = (cs in ('원수보험계약', '합 계', '합계', '보험계약마진', '발행한 보험계약') or
-                           ('보험계약마진' in cs and '출재' not in cs and '상각' not in cs and '재보험' not in cs))
-            if not is_data_row:
-                continue
-
-            row = []
-            for v in cells[i+1:i+25]:
-                vs = v.strip()
-                if any(c.isalpha() for c in vs) and '.' not in vs:
-                    if row:
-                        break
-                    continue
-                n = _parse_num(vs)
-                row.append(n)
-                if len(row) >= 20:
-                    break
-
-            real_nums = [n for n in row if n > 0]
-            if len(real_nums) < 4:
-                continue
-
-            # 합계는 마지막 값
-            total = real_nums[-1]
-            buckets = real_nums[:-1]
-
-            if not buckets:
-                continue
-
-            nb = len(buckets)
-            if nb >= 10:
-                r = {83: buckets[0],
-                     84: sum(buckets[1:3]),
-                     85: sum(buckets[3:5]),
-                     86: sum(buckets[5:10]),
-                     87: sum(buckets[10:]),
-                     88: total}
-            elif nb == 9:
-                r = {83: buckets[0], 84: sum(buckets[1:3]), 85: sum(buckets[3:5]),
-                     86: buckets[5], 87: sum(buckets[6:]), 88: total}
-            elif nb == 8:
-                r = {83: buckets[0], 84: sum(buckets[1:3]), 85: sum(buckets[3:5]),
-                     86: buckets[5], 87: sum(buckets[6:]), 88: total}
-            elif nb == 7:
-                r = {83: buckets[0], 84: buckets[1]+buckets[2],
-                     85: buckets[3]+buckets[4], 86: buckets[5], 87: buckets[6], 88: total}
-            elif nb == 6:
-                r = {83: buckets[0], 84: buckets[1], 85: buckets[2],
-                     86: buckets[3], 87: buckets[4], 88: total}
-            elif nb == 5:
-                r = {83: buckets[0], 84: buckets[1], 85: buckets[2],
-                     86: buckets[3], 87: 0, 88: total}
-            elif nb == 4:
-                r = {83: buckets[0], 84: buckets[1], 85: buckets[2],
-                     86: buckets[3], 87: 0, 88: total}
-            else:
-                continue
-
-            # Verify consistency
-            s = r[83] + r[84] + r[85] + r[86] + r.get(87, 0)
-            if abs(s - total) < total * 0.02:
-                return r
-
-    # ── 패턴B: 연도×포트폴리오 행렬 구조 (KB생명 등)
-    # 패턴A에서 실패한 경우에만 시도
+    # ── 패턴B: 연도별 행 구조 (메리츠, 동양, DB 등) — 패턴A보다 먼저 시도
     # 행: 1년, 2년, ..., n년, 합계 / 열: 포트폴리오1...포트폴리오N, 합계
-    # 마지막 열 = 발행한 보험계약 합계
     all_candidates = [(pos, text) for sec in sections for pos, text in sec] if candidates else []
     for pos, text in all_candidates:
         cells = text.split('|')
@@ -2879,6 +2970,110 @@ def _extract_csm_maturity(filepath, csm_total):
         if csm_total > 0 and abs(total_est - csm_total) < csm_total * 0.05:
             r[88] = total_est
             return r
+
+    # ── 패턴A: 버킷 헤더 구조 (교보, 삼성생명, 현대해상 등) — 패턴B 실패 시 사용
+    # 모든 후보 테이블을 순회하여 가장 세분화된(버킷 수 많은) 결과를 우선 사용
+    pa_best_r = None
+    pa_best_nb = 0
+    pa_all_results = []  # list of (nb, r) for deduplication
+    for pa_pos, pa_text in all_candidates:
+        pa_header = pa_text[:600]
+        pa_cells = pa_text.split('|')
+        if not re.search(r'\d+년\s*이하|\d+년\s*초과|\d+년\s*이내|\d+년\s*[~～]\s*\d+년|\d+[~～]\d+년', pa_header):
+            continue
+        # Detect unit for this table
+        _pa_ctx = re.sub(r'<[^>]+>', ' ', content[max(0, pa_pos-500):pa_pos])
+        _pa_unit = 1
+        if '단위 : 원' in _pa_ctx or '단위:원' in _pa_ctx or '(단위: 원)' in _pa_ctx or '단위 : 원)' in _pa_ctx:
+            _pa_unit = 1e-6
+        elif '단위 : 억원' in _pa_ctx or '(단위: 억원)' in _pa_ctx:
+            _pa_unit = 100
+
+        for i, cell in enumerate(pa_cells):
+            cs = cell.strip()
+            _next_vs = pa_cells[i+1].strip() if i+1 < len(pa_cells) else ''
+            _next_is_num = bool(_next_vs and not any(c.isalpha() for c in _next_vs))
+            is_data_row = (cs in ('원수보험계약', '합 계', '합계', '보험계약마진', '발행한 보험계약',
+                                  '당기손익인식 예상액') or
+                           (cs == '보험계약' and _next_is_num) or
+                           ('보험계약마진' in cs and '출재' not in cs and '상각' not in cs and '재보험' not in cs))
+            if not is_data_row:
+                continue
+
+            row = []
+            for v in pa_cells[i+1:i+25]:
+                vs = v.strip()
+                if any(c.isalpha() for c in vs) and '.' not in vs:
+                    if row:
+                        break
+                    continue
+                n = _parse_num(vs)
+                row.append(n)
+                if len(row) >= 20:
+                    break
+
+            real_nums = [n for n in row if n > 0]
+            if len(real_nums) < 4:
+                continue
+
+            total = real_nums[-1]
+            buckets = real_nums[:-1]
+            if not buckets:
+                continue
+
+            nb = len(buckets)
+            if nb >= 10:
+                r = {83: buckets[0], 84: sum(buckets[1:3]), 85: sum(buckets[3:5]),
+                     86: sum(buckets[5:10]), 87: sum(buckets[10:]), 88: total}
+            elif nb == 9:
+                r = {83: buckets[0], 84: sum(buckets[1:3]), 85: sum(buckets[3:5]),
+                     86: buckets[5], 87: sum(buckets[6:]), 88: total}
+            elif nb == 8:
+                r = {83: buckets[0], 84: sum(buckets[1:3]), 85: sum(buckets[3:5]),
+                     86: buckets[5], 87: sum(buckets[6:]), 88: total}
+            elif nb == 7:
+                # "X년초과Y년이하" format: each column is 1yr → Col84=1~2yr only
+                # "X~Y년" or "X년~Y년" format: ranges → Col84=1~3yr (2 buckets)
+                _hdr7 = pa_header[:600]
+                _is_choga = bool(re.search(r'\d+년\s*초과\s*\d+년\s*이하', _hdr7))
+                if _is_choga:
+                    r = {83: buckets[0], 84: buckets[1],
+                         85: buckets[2]+buckets[3]+buckets[4], 86: buckets[5], 87: buckets[6], 88: total}
+                else:
+                    r = {83: buckets[0], 84: buckets[1]+buckets[2],
+                         85: buckets[3]+buckets[4], 86: buckets[5], 87: buckets[6], 88: total}
+            elif nb == 6:
+                r = {83: buckets[0], 84: buckets[1], 85: buckets[2],
+                     86: buckets[3], 87: buckets[4], 88: total}
+            elif nb == 5:
+                r = {83: buckets[0], 84: buckets[1], 85: buckets[2],
+                     86: buckets[3], 87: 0, 88: total}
+            elif nb == 4:
+                r = {83: buckets[0], 84: buckets[1], 85: buckets[2],
+                     86: buckets[3], 87: 0, 88: total}
+            else:
+                continue
+
+            if _pa_unit != 1:
+                r = {k: round(v * _pa_unit, 2) for k, v in r.items()}
+                total = round(total * _pa_unit, 2)
+            s = r[83] + r[84] + r[85] + r[86] + r.get(87, 0)
+            if (abs(s - total) < max(total * 0.02, 1) and
+                    abs(total - csm_total) < max(csm_total * 0.03, 1)):
+                pa_all_results.append((nb, r))
+
+    if pa_all_results:
+        # If multiple results share the same Col83+Col84+Col85 (same leading buckets),
+        # prefer lowest nb (most aggregated); otherwise prefer highest nb (most granular).
+        if len(pa_all_results) == 1:
+            return pa_all_results[0][1]
+        key83_85 = {(round(r[83], -1), round(r[84], -1), round(r[85], -1)) for _, r in pa_all_results}
+        if len(key83_85) == 1:
+            # All results have same leading buckets → prefer lowest nb (e.g. Samsung Life 4-bucket)
+            return min(pa_all_results, key=lambda x: x[0])[1]
+        else:
+            # Different leading buckets → prefer highest nb (e.g. Meritz 15-bucket vs 9-bucket)
+            return max(pa_all_results, key=lambda x: x[0])[1]
 
     return {}
 
@@ -3427,7 +3622,8 @@ def _extract_oci_detail(filepath, oci_total=None):
     return {col: val for col, val in result.items() if val != 0}
 
 
-def parse_annual_doc_data(corp_name, csm_total=None, oci_total=None, year="2025", **kwargs):
+def parse_annual_doc_data(corp_name, csm_total=None, oci_total=None, year="2025",
+                          xbrl_path=None, **kwargs):
     """사업보고서 doc.xml에서 K-ICS, CSM기간별, 감응도, OCI세부 통합 추출.
     반환: {col: value, ...}
     """
@@ -3465,7 +3661,12 @@ def parse_annual_doc_data(corp_name, csm_total=None, oci_total=None, year="2025"
     result.update(oci)
 
     if csm_total and csm_total > 0:
-        maturity = _extract_csm_maturity(doc_path, csm_total)
+        # XBRL MaturityAxis 우선 시도, 없으면 doc.xml fallback
+        maturity = {}
+        if xbrl_path:
+            maturity = parse_csm_maturity_xbrl(xbrl_path, year, ref_date=f"{year}-12-31")
+        if not maturity:
+            maturity = _extract_csm_maturity(doc_path, csm_total)
         result.update(maturity)
 
     # 복잡한 구조로 파싱 불가 또는 XBRL로 이미 추출되는 회사 → 스킵
@@ -3947,9 +4148,10 @@ def extract_company_data(corp_name, year="2025", report_type="사업보고서", 
                     # 단순 OperatingExpenseInvestment(전체) 태그 제외
                     if k in ("dart_OperatingExpenseInvestment", "ifrs-full_OperatingExpenseInvestment"):
                         continue
-                    # 이익/수익/관련자 거래 태그 제외
+                    # 이익/수익/관련자 거래/상각후원가측정 태그 제외
                     if any(x in k for x in ("Gain", "Income", "Revenue", "RelatedParty",
-                                             "DisclosureOfTransactions")):
+                                             "DisclosureOfTransactions",
+                                             "AtAmortizedCost", "AtAmortisedCost")):
                         continue
                     # udf_ 계열 OfOperatingExpenseInvestment는 포함 (DB손보 패턴)
                     total += v
@@ -3962,10 +4164,11 @@ def extract_company_data(corp_name, year="2025", report_type="사업보고서", 
     rent = _get_pl_multi(COL40_RENT)
     other_inc = _get_pl_multi(COL40_OTHER_INC)
     # udf_IS_*OfInvestmentIncome 추가 수익 태그 합산 (신한라이프 등, pl키는 dart_udf_IS_... 형태)
-    # 처분이익/평가이익 등 일회성 손익 태그는 라벨로 필터링
-    _EXCLUDE_LABEL_KW = ("처분", "평가", "상각후원가측정")
+    # 처분이익/평가이익/종속기업 등 일회성·지분법 손익 태그는 라벨로 필터링
+    _EXCLUDE_LABEL_KW = ("처분", "평가", "상각후원가측정", "종속기업")
     _lab_file = xbrl_path.replace(".xbrl", "_lab-ko.xml")
     _bad_udf = set()
+    _bad_udf_exp = set()
     if os.path.exists(_lab_file):
         try:
             _lt = ET.parse(_lab_file)
@@ -3978,18 +4181,27 @@ def extract_company_data(corp_name, year="2025", report_type="사업보고서", 
                 _href = _e.get(f"{_xl}href", "")
                 _lbl_ref = _e.get(f"{_xl}label", "")
                 if "udf_IS_" in _href and COL40_UDF_INC_SUFFIX in _href:
-                    # 대응 label 텍스트 검색
                     for _lbl_id, _lbl_text in _lbl_map.items():
                         if _lbl_ref.replace("Loc_", "Label_") in _lbl_id or _lbl_ref in _lbl_id:
                             if any(kw in _lbl_text for kw in _EXCLUDE_LABEL_KW):
-                                # href에서 tag local name 추출
-                                _local = _href.split("#")[-1].split("_", 1)[-1]  # entity..._udf_IS_...
+                                _local = _href.split("#")[-1].split("_", 1)[-1]
                                 _bad_udf.add("dart_" + _local)
+                # UDF expense tags with 처분/평가/종속기업 label: also exclude
+                if "udf_IS_" in _href and COL40_UDF_EXP_PREFIX in _href:
+                    for _lbl_id, _lbl_text in _lbl_map.items():
+                        if _lbl_ref.replace("Loc_", "Label_") in _lbl_id or _lbl_ref in _lbl_id:
+                            if any(kw in _lbl_text for kw in _EXCLUDE_LABEL_KW):
+                                _local = _href.split("#")[-1].split("_", 1)[-1]
+                                _bad_udf_exp.add("dart_" + _local)
         except Exception:
             pass
     udf_inc = sum(v for k, v in pl.items()
                   if "udf_" in k and COL40_UDF_INC_SUFFIX in k and k not in _bad_udf)
     other_exp = _get_pl_by_keyword(COL40_OTHER_EXP_KEYWORDS)
+    # Subtract excluded UDF expense tags (처분/평가/종속기업 label)
+    for _k, _v in pl.items():
+        if _k in _bad_udf_exp:
+            other_exp -= _v
     col40_val = fee + rent + other_inc + udf_inc - other_exp
     if col40_val:
         result[40] = col40_val / 1e6
@@ -4203,6 +4415,7 @@ def extract_company_data(corp_name, year="2025", report_type="사업보고서", 
         total_assets_for_doc = result.get(4, 0)
         doc_data = parse_annual_doc_data(corp_name, csm_total=csm_total_for_doc,
                                          oci_total=oci_total_for_doc, year=year,
+                                         xbrl_path=xbrl_path,
                                          total_assets=total_assets_for_doc)
         for col, val in doc_data.items():
             if col not in result or result[col] == 0:
