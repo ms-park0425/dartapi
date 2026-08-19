@@ -126,7 +126,7 @@ FAIL·MISS 셀은 `DATA_작업_빈칸.xlsx`에 주황색으로 자동 표시됩�
 - **2412 (70%)**: XBRL에 BEL/RA/CSM 구성요소 태그가 없는 회사 다수(2025년부터 확대 공시). FISIS로 보완. OCI세부(Col26-30)도 FISIS 추가.
 - **2503 (67%)**: 1분기 보고서는 CSM변동·OCI누계·BEL 등 사업보고서 전용 항목이 없어 비교 대상 자체가 적음. K-ICS·RA·CSM·해약환급금·OCI세부는 FISIS로 채움.
 - **2506 (68%)**: 반기 보고서. 손보사 Col36~40(보험금융/재보험금융/금융손익/재산관리비/기타투자) 반기 기재 방식 차이 처리.
-- **2509 (77%)**: 3분기 보고서. doc_1q_2025.xml(실제 3분기 내용)에서 OCI세부·CSM기간별·손보사RA 추가 추출.
+- **2509 (80%)**: 3분기 보고서. doc_3q XML에서 메리츠·KB손보 RA 직접 추출. 한화·동양·미래에셋 분기 BEL 추가 패턴. XBRL MaturityAxis CSM기간별 적용.
 - **2512 (88%)**: 사업보고서 전용 항목 포함 최고 정확도. XBRL MaturityAxis에서 삼성생명·한화생명·동양생명·미래에셋 CSM기간별 직접 추출. 주요 MISS: 예실차 세부(Col111-117), CSM기간별(KB손보).
 
 > **2412 BEL/CSM MISS 원인**: 삼성생명 기준 2024년 XBRL 태그 수 245개(BEL/RA/CSM 분리 없음) → 2025년 988개(구성요소 분리 태그 신설). 2025년부터 대부분 회사가 XBRL 공시 수준을 크게 확대해 해결됨.
@@ -405,7 +405,7 @@ XBRL이 아닌 보고서 원문(document.xml)에서 파싱하는 항목은 회�
 | 37 | 재보험금융손익 | XBRL | Reinsurance finance income − expense | ✅ 12/12 (반기 손보사=0) |
 | 38 | 금융손익 | 계산 | Col35 − Col36 − Col37 + Col39 − Col40 | ✅ 12/12 (반기 손보사=0) |
 | 39 | 재산관리비 | XBRL | `ifrs-full_SellingGeneralAndAdministrativeExpense` | ✅ 11/11 (반기 손보사=0) |
-| 40 | 기타투자손익 | XBRL | 수수료+임대료+기타수익−기타비용 합산 | ⚠️ 일부 소오차 (반기 손보사=0) |
+| 40 | 기타투자손익 | XBRL | 수수료+임대료+기타수익−기타비용 합산 (상각후원가·처분·평가·종속기업 태그 제외) | ⚠️ 일부 소오차 (반기 손보사=0) |
 | 41 | 영업이익 | XBRL | `ifrs-full_ProfitLossFromOperatingActivities` | ✅ 12/12 |
 | 42 | 영업외손익 | XBRL | `ifrs-full_NonOperatingProfitLoss` | ✅ 12/12 |
 | 43 | 세전손익 | XBRL | `ifrs-full_ProfitLossBeforeTax` | ✅ 12/12 |
@@ -447,17 +447,18 @@ XBRL이 아닌 보고서 원문(document.xml)에서 파싱하는 항목은 회�
 
 | Col | 항목 | 소스 | 태그 / 방법 | 결과 |
 |-----|------|------|-----------|------|
-| 73 | BEL | XBRL → 원문XML | XBRL 보험계약부채 구성요소 BEL. fallback: 1분기보고서 원문XML 구성요소 테이블 | ✅ 12/12 |
-| 74 | RA | XBRL → 원문XML → **FISIS** | 동일; XBRL/원문XML 실패 시 FISIS SH156/SI152 A112+A122 | ✅ 12/12 |
+| 73 | BEL | XBRL → 원문XML | XBRL 보험계약부채 구성요소 BEL. 다중 패턴(DisaggregationAxis·ComponentsAxis·InsuranceContractsAxis) 순차 시도 | ✅ 12/12 (연간·분기) |
+| 74 | RA | XBRL → 원문XML → **FISIS** | 동일; 분기는 doc_3q/doc_1q "분기말 순장부금액" 행 → FISIS SH156/SI152 A112+A122 | ✅ 12/12 (연간·분기) |
 | 75 | CSM | XBRL → 원문XML → **FISIS** | 동일; XBRL/원문XML 실패 시 FISIS SH156/SI152 A113 | ✅ 12/12 |
-| 76 | 신계약CSM | XBRL → 원문XML | XBRL CSM 변동 주석; fallback: 사업보고서 원문XML CSM 변동표 | ⚠️ 동양 MISS |
-| 77 | CSM 상각 | XBRL → 원문XML | 동일 | ⚠️ 동양 MISS |
-| 78 | CSM 조정 | XBRL → 원문XML | 동일 | ✅ 12/12 |
-| 79 | 보험금융손익(CSM) | XBRL → 원문XML | 동일 | ⚠️ DB손보 MISS |
-| 80 | 전기말 CSM | XBRL → 원문XML | XBRL 전기말 CSM; fallback: 원문XML 변동표 `기초` 행 | ⚠️ 삼성화재·DB손보 MISS |
+| 76 | 신계약CSM | XBRL → 원문XML | XBRL CSM 변동 주석; fallback: 사업보고서 원문XML CSM 변동표 | ⚠️ 동양 MISS (연간만 추출, 분기 없음) |
+| 77 | CSM 상각 | XBRL → 원문XML | 동일 | ⚠️ 동양 MISS (연간만) |
+| 78 | CSM 조정 | XBRL → 원문XML | 동일 | ✅ 12/12 (연간) |
+| 79 | 보험금융손익(CSM) | XBRL → 원문XML | 동일 | ⚠️ DB손보 MISS (연간만) |
+| 80 | 전기말 CSM | XBRL → 원문XML | XBRL 전기말 CSM; fallback: 원문XML 변동표 `기초` 행 | ⚠️ 삼성화재·DB손보 MISS (연간만) |
 
-> **RA·CSM FISIS fallback**: 분기/반기는 FISIS 값을 우선 사용(XBRL보다 정확). 사업보고서는 XBRL/원문XML에서 뽑지 못한 경우만 FISIS 사용.  
-> **손보사 RA 오차**: FISIS SI152 RA 집계 기준이 엑셀 기준(재보험 제외)과 5~10% 차이 있어 XBRL 우선.
+> **RA·CSM FISIS fallback**: 분기/반기는 doc_3q/doc_1q XML 우선, 없으면 FISIS. 사업보고서는 XBRL/원문XML 우선.  
+> **분기 BEL**: 추가 패턴(InsuranceContractsAxis 기반) 추가로 2509 기준 12/12 추출.  
+> **Col76~80**: 사업보고서 전용. 3분기/반기 XBRL에 CSM변동 태그 없어 분기에서는 추출 불가.
 
 ---
 
@@ -465,8 +466,12 @@ XBRL이 아닌 보고서 원문(document.xml)에서 파싱하는 항목은 회�
 
 | Col | 항목 | 소스 | 결과 |
 |-----|------|------|------|
-| 83~87 | 1년이하~10년초과 | 원문XML | ⚠️ 교보·한화·동양·DB손보·삼성화재 OK / 나머지 7개사 MISS (테이블 미공시) |
+| 83~87 | 1년이하~10년초과 | **XBRL MaturityAxis** → 원문XML | XBRL `ContractualServiceMargin+MaturityAxis` 우선; fallback: doc.xml 테이블 패턴A/B | ⚠️ 연간 9/12 OK (미래에셋·KB손보 MISS), 분기 일부 MISS |
 | 88 | 합계 | 계산 | = Col75 ✅ 11/11 |
+
+> **XBRL MaturityAxis 지원 회사 (2025 연간)**: 삼성생명(4버킷)·한화생명·동양생명·미래에셋 일부.  
+> **doc.xml 지원 회사**: 교보생명·현대해상("초과/이하" 7버킷)·메리츠화재(15버킷 상세)·DB손보·삼성화재.  
+> **분기(2509)**: 삼성화재·현대해상·KB손보는 Q3 MaturityAxis 없어 MISS.
 
 ---
 
