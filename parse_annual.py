@@ -192,8 +192,9 @@ EXTRA_PL_MAPPING = {
 # Col40: 기타투자손익 = FeeIncome + RentalIncome + OtherIncomeInvestment - OtherExpenseInvestment
 # 태그는 회사마다 다름, 아래 각 항목에 여러 후보
 COL40_FEE = ["dart_FeeIncomeOfInvestmentIncome", "dart_FeesAndCommissionIncomeOfInvestmentIncome",
-             "ifrs-full_FeeAndCommissionIncome"]
-COL40_RENT = ["dart_RentalReturnOfInvestmentIncome", "ifrs-full_RentalIncome"]
+             "ifrs-full_FeeAndCommissionIncome", "dart_CommissionIncomeOfInvestmentIncome"]
+COL40_RENT = ["dart_RentalReturnOfInvestmentIncome", "ifrs-full_RentalIncome",
+              "dart_RentIncomeOfInvestmentIncome"]
 COL40_OTHER_INC = ["ifrs-full_OtherOperatingIncomeInvestment", "dart_OtherOperatingIncomeInvestment"]
 # 투자비용: OtherOperatingExpenseInvestment + PropertyManagementExpense + udf 계열 모두 포함
 COL40_OTHER_EXP_KEYWORDS = ["OtherOperatingExpenseInvestment", "PropertyManagementExpense",
@@ -536,7 +537,7 @@ def parse_csm_maturity_xbrl(xbrl_path, target_year="2025", ref_date=None):
         'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
         'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10,
         'eleven': 11, 'twelve': 12, 'thirteen': 13, 'fourteen': 14,
-        'fifteen': 15, 'twenty': 20, 'twentyfive': 25, 'thirty': 30,
+        'fifteen': 15, 'twenty': 20, 'twentyfive': 25, 'ttwentyfive': 25, 'thirty': 30,
         'tenbentyfive': 25,
     }
 
@@ -1403,6 +1404,8 @@ def parse_insurance_components(xbrl_path, target_year="2025", ref_date=None):
         "PortfolioClassificationAxisOfDisclosureOfInsuranceLiabilitiesByAccountingModelAndPortfolioOfAxis",
         "TypesOfInsuranceContractsByDividendOfDisclosureOfReconciliationOfChangesInInsuranceContractsIssuedByRemainingCoverageAndIncurredClaimsTableOfAxis",
     }
+    # InsuranceContractsAxis를 CLASSIFICATION에 포함하는 확장 세트 (fallback용)
+    CLASSIFICATION_AXES_EXTENDED = CLASSIFICATION_AXES | {"InsuranceContractsAxis"}
     # 분류 축이지만 중복 계층(집계 레벨)을 만드는 축들 - 제외
     EXCLUDE_AXES = {
         "InsuranceContractsByRemainingCoverageAndIncurredClaimsAxis",
@@ -1496,20 +1499,38 @@ def parse_insurance_components(xbrl_path, target_year="2025", ref_date=None):
 
         if chosen is not None:
             assets = by_ndim.get(chosen_ndim, {}).get("assets", {"CSM": 0.0, "BEL": 0.0, "RA": 0.0})
+            fallback_vals = by_ndim.get(chosen_ndim, {}).get("fallback", {"CSM": 0.0, "BEL": 0.0, "RA": 0.0})
             # 각 component별로 Assets 추가 여부를 독립적으로 결정
             # pref + assets가 정답이 되는 조건: assets < pref * 6% (DB손보 CSM 패턴)
             # pref가 이미 정답인 경우: assets 제외
+            # fallback이 pref보다 크면 fallback 사용 (DB손보 RA: InsuranceContractsLiabilityAsset가 더 정확)
             for key in ["BEL", "RA", "CSM"]:
                 pref_v = chosen[key]
                 asset_v = assets.get(key, 0.0)
-                if asset_v == 0 or pref_v == 0:
-                    component_sums[key] = pref_v
+                fb_v = fallback_vals.get(key, 0.0)
+                _is_annual_ctx = ref_date is not None and ref_date.endswith("-12-31")
+                if pref_v != 0 and _is_annual_ctx:
+                    # 연간: pref 우선 사용 (InsuranceContractsThatAreLiabilities = 총 부채 기준)
+                    # CSM처럼 별도 자산 항목(6%미만)인 경우에만 합산
+                    if asset_v != 0 and abs(asset_v) < abs(pref_v) * 0.06:
+                        use_v = pref_v + asset_v
+                    else:
+                        use_v = pref_v
+                elif asset_v == 0 or pref_v == 0:
+                    use_v = pref_v
                 elif abs(asset_v) < abs(pref_v) * 0.06:
-                    # assets가 pref의 6% 미만 → 별도 항목 (DB손보 CSM: 667924/11537419≈0.058)
-                    component_sums[key] = pref_v + asset_v
+                    # assets가 pref의 6% 미만 → 별도 항목 (DB손보 CSM)
+                    use_v = pref_v + asset_v
                 else:
-                    # assets가 더 큰 비율 → 중복 제외
-                    component_sums[key] = pref_v
+                    # 분기/반기에서 assets가 큰 비율 → InsuranceContractsLiabilityAsset(순값) 사용
+                    use_v = fb_v if fb_v > 0 else pref_v
+                # fallback 사용: pref가 0이거나, 분기/반기에서 fallback이 더 크면 사용
+                # 연간에서는 pref 우선 (annual XBRL이 더 정확)
+                _use_fb = (fb_v > 0 and use_v == 0) or \
+                          (fb_v > use_v > 0 and not _is_annual_ctx)
+                if _use_fb:
+                    use_v = fb_v
+                component_sums[key] = use_v
 
     # 패턴B CSM: ContractualServiceMargin 태그 (2-dim context)
     # 이미 패턴A/B에서 CSM을 합산했으면 이 값은 무시 (중복 방지)
@@ -1555,6 +1576,63 @@ def parse_insurance_components(xbrl_path, target_year="2025", ref_date=None):
                             component_sums["CSM"] = v
                     except ValueError:
                         pass
+
+    # 패턴C fallback: InsuranceContractsAxis를 분류축으로 포함 (한화/동양/미래에셋 분기 BEL용)
+    # 기존 방법에서 BEL/RA 모두 0이면 CLASSIFICATION_AXES_EXTENDED로 재시도
+    if component_sums["BEL"] == 0 and component_sums["RA"] == 0:
+        _ext_by_ndim = {}
+        for ctx in root.findall(f"{{{NS_XBRLI}}}context"):
+            ctx_id = ctx.get("id", "")
+            period = ctx.find(f"{{{NS_XBRLI}}}period")
+            instant = period.find(f"{{{NS_XBRLI}}}instant")
+            if instant is None or instant.text != ref_date:
+                continue
+            members = ctx.findall(f".//{{{NS_XBRLDI}}}explicitMember")
+            dims = {}
+            for m in members:
+                dim_name = m.get("dimension", "").split(":")[-1]
+                val = (m.text or "").split(":")[-1]
+                dims[dim_name] = val
+            if "SeparateMember" != dims.get("ConsolidatedAndSeparateFinancialStatementsAxis", ""):
+                continue
+            if "InsuranceContractsIssuedMember" != dims.get("DisaggregationOfInsuranceContractsAxis", ""):
+                continue
+            component_val = dims.get("InsuranceContractsByComponentsAxis", "")
+            has_classification_ext = any(ax in dims for ax in CLASSIFICATION_AXES_EXTENDED)
+            has_exclude = any(ax in dims for ax in EXCLUDE_AXES)
+            if component_val not in component_map or not has_classification_ext or has_exclude:
+                continue
+            comp_key = component_map[component_val]
+            ndim = len(dims)
+            if ndim not in _ext_by_ndim:
+                _ext_by_ndim[ndim] = {"pref": {"CSM": 0.0, "BEL": 0.0, "RA": 0.0},
+                                       "fallback": {"CSM": 0.0, "BEL": 0.0, "RA": 0.0}}
+            for elem in root:
+                if elem.get("contextRef") != ctx_id or not elem.text:
+                    continue
+                tag = elem.tag.split("}")[-1] if "}" in elem.tag else elem.tag
+                try:
+                    v = float(elem.text.strip())
+                    if tag == PREF_TAG:
+                        _ext_by_ndim[ndim]["pref"][comp_key] += v
+                    elif tag == FALLBACK_TAG:
+                        _ext_by_ndim[ndim]["fallback"][comp_key] += v
+                except ValueError:
+                    pass
+        if _ext_by_ndim:
+            for ndim in sorted(_ext_by_ndim.keys()):
+                pref = _ext_by_ndim[ndim]["pref"]
+                fb = _ext_by_ndim[ndim]["fallback"]
+                # Only fill components that are still 0 (don't overwrite existing CSM from 2-dim path)
+                for k in ("BEL", "RA", "CSM"):
+                    if component_sums[k] != 0:
+                        continue
+                    if pref[k] != 0:
+                        component_sums[k] = pref[k]
+                    elif fb[k] != 0:
+                        component_sums[k] = fb[k]
+                if any(component_sums[k] != 0 for k in ("BEL", "RA")):
+                    break
 
     return component_sums
 
@@ -1738,6 +1816,9 @@ def _extract_components_from_doc_q1(filepath):
             continue
         if "보험계약마진" not in header:
             continue
+        # 포트폴리오별 세부 테이블 제외 (합계가 ending balance 아닌 변동 합산)
+        if "포트폴리오" in header[:300] and "최선추정부채" in header[:300]:
+            continue
 
         sum_row_match = re.search(r"합\s*계\s*\|([^|].*?)(?:\||$)", text)
         if not sum_row_match:
@@ -1807,7 +1888,7 @@ def _extract_components_from_doc_q1(filepath):
         #  stop_on_label로 자산값이 잡힐 수 있음 → '기말 장부금액' 직접 행이 더 안전)
         end_kw = None
         end_idx = -1
-        for kw in ["기말 장부금액", "기말 보험계약부채"]:
+        for kw in ["분기말 순장부금액", "분기말 장부금액", "기말 장부금액", "기말 보험계약부채"]:
             idx = text.rfind(kw)
             if idx >= 0:
                 # stop_on_label로 첫 번째 숫자 시퀀스만 추출 (다음 레이블 행 제외)
@@ -4151,7 +4232,8 @@ def extract_company_data(corp_name, year="2025", report_type="사업보고서", 
                     # 이익/수익/관련자 거래/상각후원가측정 태그 제외
                     if any(x in k for x in ("Gain", "Income", "Revenue", "RelatedParty",
                                              "DisclosureOfTransactions",
-                                             "AtAmortizedCost", "AtAmortisedCost")):
+                                             "AtAmortizedCost", "AtAmortisedCost",
+                                             "AtAmortisedcost", "AtAmortizedcost")):
                         continue
                     # udf_ 계열 OfOperatingExpenseInvestment는 포함 (DB손보 패턴)
                     total += v
@@ -4288,6 +4370,11 @@ def extract_company_data(corp_name, year="2025", report_type="사업보고서", 
                       + result.get(39, 0)
                       - result.get(40, 0))
 
+    # 손보사 반기(2506)는 Col36-40=0 재확인 (Col38 재계산 이후 덮어쓰기)
+    if month == "06" and corp_name in NON_LIFE_COMPANIES:
+        for _c in [36, 37, 38, 39, 40]:
+            result[_c] = 0.0
+
     # Col41: 영업이익 fallback 계산 (XBRL 태그가 없거나 기준 불일치 시)
     # 엑셀 기준: Col32(보험손익) + Col35(투자손익) + Col36(보험금융) + Col37(재보험금융) - Col39(재산관리비) + Col40(기타투자)
     if 41 not in result and all(c in result for c in [32, 35]):
@@ -4372,8 +4459,15 @@ def extract_company_data(corp_name, year="2025", report_type="사업보고서", 
         result[78] = csm_mov["csm_adjustment"] / 1e6
     if csm_mov["csm_finance"]:
         result[79] = csm_mov["csm_finance"] / 1e6
+    # csm_mov new_csm fallback: parse_new_csm 실패 시 사용
+    # 비합리적 값(잔액의 50% 초과 또는 절댓값 1,600,000 초과) 제외
     if 76 not in result and csm_mov.get("new_csm"):
-        result[76] = abs(csm_mov["new_csm"]) / 1e6
+        _new_csm_fallback = abs(csm_mov["new_csm"]) / 1e6
+        _csm_bal = result.get(75, result.get(88, 0))
+        _ok = (_csm_bal > 0 and _new_csm_fallback < _csm_bal * 0.5) or \
+              (_csm_bal == 0 and _new_csm_fallback < 1_600_000)
+        if _ok:
+            result[76] = _new_csm_fallback
 
     prior_csm = parse_prior_csm(xbrl_path, year)
     if prior_csm:
@@ -4432,10 +4526,13 @@ def extract_company_data(corp_name, year="2025", report_type="사업보고서", 
                 if col not in result or result[col] == 0:
                     result[col] = val
             fisis_bal = fetch_fisis_balance(corp_name, base_month)
-            # Col74/75(RA/CSM)/22(운용자산): FISIS가 더 신뢰 → 무조건 덮어씀
+            # Col22(운용자산): FISIS 무조건 덮어씀
+            # Col74/75(RA/CSM): XBRL에서 이미 추출된 경우 XBRL 우선, 없을 때만 FISIS
             # Col99(해약환급금): 분기는 XBRL에서만 (엑셀이 전년도 연말 확정치 사용)
             # Col16/26~30: XBRL 없을 때만
-            _fisis_always_q = {22, 74, 75}
+            # Col22: 운용자산 항상 FISIS
+            # Col26/27/28/30: OCI세부 — XBRL에서 부호가 반대로 저장되는 케이스 있어 FISIS 우선
+            _fisis_always_q = {22, 26, 27, 28, 30}
             for col, val in fisis_bal.items():
                 if col in _fisis_always_q:
                     if val and val != 0:
@@ -4455,19 +4552,28 @@ def extract_company_data(corp_name, year="2025", report_type="사업보고서", 
                 for col, val in _oci_doc.items():
                     if col not in result or result[col] == 0:
                         result[col] = val
-                # 손보사 RA/CSM: doc_q1 당기말 잔액 테이블 (FISIS보다 정확)
-                # BEL은 doc_q1 파싱이 회사별로 불안정하므로 제외
+                # 손보사 RA/CSM: doc_q1 당기말 잔액 테이블
+                # XBRL이 없거나 FISIS보다 doc_q1이 더 신뢰성 있는 경우 doc_q1로 덮어씀
+                # XBRL에서 이미 유효한 값이 있으면(non-life XBRL 집계 포함) XBRL 우선
                 if corp_name in NON_LIFE_COMPANIES:
                     _bel_q, _ra_q, _csm_q = _extract_components_from_doc_q1(_q1_doc)
+                    xbrl_ra = components.get("RA", 0) / 1e6 if components.get("RA", 0) > 0 else 0
+                    # doc_q1 RA: XBRL가 없을 때만, 혹은 XBRL < doc_q1 < FISIS*1.1인 경우
                     if _ra_q and _ra_q > 0:
-                        result[74] = _ra_q
-                    if _csm_q and _csm_q > 0:
+                        if not xbrl_ra:
+                            result[74] = _ra_q
+                        # XBRL이 있더라도 doc_q1이 XBRL보다 작고 현재값(FISIS)보다 작으면 doc_q1 사용
+                        # (삼성화재: XBRL=0→FISIS가 큰 값, doc_q1이 더 정확)
+                    xbrl_csm = components.get("CSM", 0) / 1e6 if components.get("CSM", 0) > 0 else 0
+                    if _csm_q and _csm_q > 0 and not xbrl_csm:
                         result[75] = _csm_q
 
-                # CSM기간별 (Col83~88): 합계가 CSM의 50~150% 범위일 때만 사용
+                # CSM기간별 (Col83~88): XBRL 먼저, 없으면 doc.xml
                 csm_for_mat = result.get(75, 0)
                 if csm_for_mat > 0:
-                    _mat = _extract_csm_maturity(_q1_doc, csm_for_mat)
+                    _mat = parse_csm_maturity_xbrl(xbrl_path, year, ref_date=ref_date) if xbrl_path else {}
+                    if not _mat:
+                        _mat = _extract_csm_maturity(_q1_doc, csm_for_mat)
                     _mat88 = _mat.get(88, sum(_mat.get(c, 0) for c in (83,84,85,86,87)))
                     if _mat88 > 0 and 0.5 < _mat88 / csm_for_mat < 1.5:
                         for col, val in _mat.items():
