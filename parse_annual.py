@@ -1314,10 +1314,15 @@ def parse_simple_contexts(xbrl_path, target_year="2025", ref_date=None, month="1
 
         if instant is not None:
             if instant.text == ref_date:
-                if bs_ctx_id is None or "ConsolidatedAndSeparate" in ctx_id:
+                # eHYA(누계) > eHYQ(분기만) 우선: eHYQ는 분기단독이라 BS에 항목이 적음
+                _prefer = (bs_ctx_id is None or "ConsolidatedAndSeparate" in ctx_id) and not (
+                    "eHYQ" in ctx_id and bs_ctx_id is not None and "eHYA" in bs_ctx_id)
+                if _prefer:
                     bs_ctx_id = ctx_id
             elif instant.text == prior_date:
-                if prior_bs_ctx_id is None or "ConsolidatedAndSeparate" in ctx_id:
+                _prefer2 = (prior_bs_ctx_id is None or "ConsolidatedAndSeparate" in ctx_id) and not (
+                    "eHYQ" in ctx_id and prior_bs_ctx_id is not None and "eHYA" in prior_bs_ctx_id)
+                if _prefer2:
                     prior_bs_ctx_id = ctx_id
         elif start is not None and end is not None:
             if start.text == pl_start and end.text == pl_end:
