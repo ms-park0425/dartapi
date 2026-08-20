@@ -4532,7 +4532,7 @@ def extract_company_data(corp_name, year="2025", report_type="사업보고서", 
             # Col16/26~30: XBRL 없을 때만
             # Col22: 운용자산 항상 FISIS
             # Col26/27/28/30: OCI세부 — XBRL에서 부호가 반대로 저장되는 케이스 있어 FISIS 우선
-            _fisis_always_q = {22, 26, 27, 28, 30}
+            _fisis_always_q = {22, 26, 27, 28, 30, 99}
             for col, val in fisis_bal.items():
                 if col in _fisis_always_q:
                     if val and val != 0:
