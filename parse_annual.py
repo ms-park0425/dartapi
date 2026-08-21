@@ -414,12 +414,27 @@ def parse_prior_csm(xbrl_path, target_year="2025"):
         if "SeparateMember" != dims.get("ConsolidatedAndSeparateFinancialStatementsAxis", ""):
             continue
 
-        # 패턴A: 3-dim entity-specific disagg
+        # 패턴A: 3-dim entity-specific disagg / 패턴C: 3-dim IssuedMember+CSMMember
         if len(members) == 3:
-            if "ContractualServiceMarginMember" != dims.get("InsuranceContractsByComponentsAxis", ""):
-                continue
+            csm_comp = dims.get("InsuranceContractsByComponentsAxis", "")
             disagg = dims.get("DisaggregationOfInsuranceContractsAxis", "")
-            if disagg in ("InsuranceContractsIssuedMember", "ReinsuranceContractsHeldMember", ""):
+            if "ContractualServiceMarginMember" not in csm_comp:
+                continue
+            if disagg == "ReinsuranceContractsHeldMember":
+                continue
+            if disagg == "InsuranceContractsIssuedMember":
+                # 패턴C: 3-dim Separate+IssuedMember+CSMMember → direct total
+                if csm_comp == "ContractualServiceMarginMember":
+                    ctx_id = ctx.get("id", "")
+                    for elem in root:
+                        if elem.get("contextRef") != ctx_id or not elem.text:
+                            continue
+                        tag = elem.tag.split("}")[-1] if "}" in elem.tag else elem.tag
+                        if tag == "ContractualServiceMargin":
+                            try:
+                                total_b = float(elem.text.strip())
+                            except ValueError:
+                                pass
                 continue
             target_ctxs_a.add(ctx.get("id", ""))
 
@@ -436,6 +451,7 @@ def parse_prior_csm(xbrl_path, target_year="2025"):
                             total_b = float(elem.text.strip())
                         except ValueError:
                             pass
+
 
     for elem in root:
         ctx_ref = elem.get("contextRef", "")
