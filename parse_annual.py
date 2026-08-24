@@ -438,6 +438,23 @@ def parse_prior_csm(xbrl_path, target_year="2025"):
                 continue
             target_ctxs_a.add(ctx.get("id", ""))
 
+        # 패턴A2(미래에셋): 5-dim Separate+IssuedMember+InsuranceContractsAxis+TypesAx+CSMMember
+        elif len(members) == 5:
+            csm_comp = dims.get("InsuranceContractsByComponentsAxis", "")
+            disagg = dims.get("DisaggregationOfInsuranceContractsAxis", "")
+            _csm_comp_keys_a2 = {
+                "ContractualServiceMarginMember",
+                "ContractualServiceMarginRelatedToContractsThatExistedAtTransitionDateToWhichModifiedRetrospectiveApproachHasBeenAppliedMember",
+                "ContractualServiceMarginNotRelatedToContractsThatExistedAtTransitionDateToWhichModifiedRetrospectiveApproachOrFairValueApproachHasBeenAppliedMember",
+                "ContractualServiceMarginRelatedToContractsThatExistedAtTransitionDateToWhichFairValueApproachHasBeenAppliedMember",
+            }
+            if disagg == "InsuranceContractsIssuedMember" and csm_comp in _csm_comp_keys_a2:
+                _is_div5 = any(v.startswith(("ContractsOtherThanDividendsOfTypesOfContracts",
+                                             "DividendContractOfTypesOfContracts"))
+                               for v in dims.values())
+                if not _is_div5:
+                    target_ctxs_a.add(ctx.get("id", ""))
+
         # 패턴B: 2-dim (Separate + IssuedMember)
         elif len(members) == 2:
             if "InsuranceContractsIssuedMember" == dims.get("DisaggregationOfInsuranceContractsAxis", ""):
@@ -458,7 +475,8 @@ def parse_prior_csm(xbrl_path, target_year="2025"):
         if ctx_ref not in target_ctxs_a or not elem.text:
             continue
         tag = elem.tag.split("}")[-1] if "}" in elem.tag else elem.tag
-        if tag == "InsuranceContractsIssuedThatAreLiabilities":
+        if tag in ("InsuranceContractsIssuedThatAreLiabilities",
+                   "InsuranceContractsThatAreLiabilities"):
             try:
                 total_a += float(elem.text.strip())
             except ValueError:
@@ -1051,7 +1069,10 @@ def parse_csm_movement(xbrl_path, target_year="2025", ref_date=None, start_date=
         if "InsuranceContractsIssuedMember" != dims.get("DisaggregationOfInsuranceContractsAxis", ""): continue
         comp = dims.get("InsuranceContractsByComponentsAxis", "")
         if comp not in component_keys: continue
-        if len(dims) in target_ndims:
+        _div_mov = any(v.startswith(("ContractsOtherThanDividendsOfTypesOfContracts",
+                                     "DividendContractOfTypesOfContracts"))
+                       for v in dims.values())
+        if not _div_mov and len(dims) in target_ndims:
             target_ctxs.add(ctx.get("id", ""))
 
     # 태그별 합산: 각 컴포넌트 레이블에서 합산
@@ -1100,7 +1121,10 @@ def parse_csm_movement(xbrl_path, target_year="2025", ref_date=None, start_date=
             "ContractualServiceMarginMember" == dims_t.get("DisaggregationOfInsuranceContractsAxis", "")
             and "InsuranceContractsByComponentsAxis" not in dims_t
         )
-        if is_pattern1:
+        _div_sep = any(v.startswith(("ContractsOtherThanDividendsOfTypesOfContracts",
+                                     "DividendContractOfTypesOfContracts"))
+                       for v in dims_t.values())
+        if is_pattern1 and not _div_sep:
             ctx_ndim[ctx_id] = len(members)
             all_sep_ctxs.add(ctx_id)
             if ctx_id in target_ctxs and len(members) == min_ndim:
@@ -1432,6 +1456,22 @@ def parse_insurance_components(xbrl_path, target_year="2025", ref_date=None):
         "InsuranceContractsByRemainingCoverageAndIncurredClaimsAxis",
     }
 
+    # 배당 유무 구분 멤버 (보험종류별 분류와 '같은 축'에 섞여 들어오는 별개 분류체계).
+    # 2026년 미래에셋 반기 XBRL부터 TypesOfContractsAxis 안에
+    #   ① 보험종류별(생명/건강/연금/저축/기타)  ② 배당유무별(유배당/무배당)
+    # 두 분류가 함께 실린다. 둘 다 전체를 100% 분할하므로 그대로 더하면 정확히 2배가 된다.
+    DIVIDEND_CLASSIFICATION_PREFIXES = (
+        "ContractsOtherThanDividendsOfTypesOfContracts",
+        "DividendContractOfTypesOfContracts",
+    )
+
+    def _is_dividend_classification(dims):
+        for ax in CLASSIFICATION_AXES:
+            v = dims.get(ax, "")
+            if v.startswith(DIVIDEND_CLASSIFICATION_PREFIXES):
+                return True
+        return False
+
     target_ctxs = {}
     csm_2dim_ctx = None  # 2-dim CSM (삼성생명 패턴)
 
@@ -1463,7 +1503,8 @@ def parse_insurance_components(xbrl_path, target_year="2025", ref_date=None):
         # 중복 계층 축이 있으면 제외
         has_exclude = any(ax in dims for ax in EXCLUDE_AXES)
         if component_val in component_map and has_classification and not has_exclude:
-            target_ctxs[ctx_id] = (component_map[component_val], len(dims))
+            target_ctxs[ctx_id] = (component_map[component_val], len(dims),
+                                   _is_dividend_classification(dims))
 
         # 패턴B CSM: 2-dim (Separate + IssuedMember), tag=ContractualServiceMargin
         elif len(dims) == 2 and component_val == "":
@@ -1476,8 +1517,19 @@ def parse_insurance_components(xbrl_path, target_year="2025", ref_date=None):
 
     # dim별, 태그별로 분리 (InsuranceContractsThatAreAssets는 절댓값으로 합산)
     ASSET_TAG = "InsuranceContractsThatAreAssets"
+    # 같은 (ndim, 구성요소)에 보험종류별 context 가 있으면 배당유무별 context 는 버린다.
+    # (없으면 배당유무별만으로도 전체가 되므로 그대로 사용)
+    _has_plain = set()
+    for _c, (_comp, _nd, _div) in target_ctxs.items():
+        if not _div:
+            _has_plain.add((_nd, _comp))
+    _dropped = [c for c, (comp, nd, div) in target_ctxs.items()
+                if div and (nd, comp) in _has_plain]
+    for _c in _dropped:
+        del target_ctxs[_c]
+
     by_ndim = {}  # ndim -> {"pref": {comp: sum}, "fallback": {comp: sum}}
-    for ctx_ref, (comp_key, ndim) in target_ctxs.items():
+    for ctx_ref, (comp_key, ndim, _is_div) in target_ctxs.items():
         if ndim not in by_ndim:
             by_ndim[ndim] = {
                 "pref": {"CSM": 0.0, "BEL": 0.0, "RA": 0.0},
