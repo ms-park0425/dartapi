@@ -67,6 +67,9 @@ def _combined(v):
             mm = int(round((v - yy) * 100))
             if mm in (3, 6, 9, 12):
                 return 2000 + yy, 'Q%d' % (mm // 3)
+        # 2022~2099 정수 연도 헤더 (메리츠화재 Insurance_PL 등)
+        if 2000 < yy < 2100:
+            return yy, 'FY'
         return None
     if not isinstance(v, str):
         return None
@@ -91,6 +94,18 @@ def _combined(v):
                 mm = {'mar': 3, 'jun': 6, 'sep': 9, 'dec': 12}[m5.group(1).lower()]
                 yy = int(m5.group(2))
                 return (2000 + yy if yy < 100 else yy), 'Q%d' % (mm // 3)
+            # 'NQ YY' 형태 (예: '1Q25', '3Q25') — 메리츠화재 Insurance_PL 서식
+            m6 = re.match(r'^([1-4])Q(\d{2,4})$', t, re.I)
+            if m6:
+                q6 = int(m6.group(1))
+                yy6 = int(m6.group(2))
+                return (2000 + yy6 if yy6 < 100 else yy6), 'Q' + str(q6)
+            # 'NH YY' 형태 (예: '1H25' = 상반기) — H1→Q2, H2→Q4 로 매핑
+            m7 = re.match(r'^([1-2])H(\d{2,4})$', t, re.I)
+            if m7:
+                h7 = int(m7.group(1))
+                yy7 = int(m7.group(2))
+                return (2000 + yy7 if yy7 < 100 else yy7), 'Q' + str(h7 * 2)
             return None
         n2 = int(m2.group(1))
         return (2000 + n2 if n2 < 100 else n2), 'Q' + m2.group(2)
@@ -119,7 +134,9 @@ def period_columns(ws, maxscan=12, default_year=None):
     연도 셀이 병합되어 있으면 병합 범위 전체에 그 연도를 전파한다.
     """
     # ① 연도+기간을 한 칸에 담은 헤더(예: '25.4Q', 날짜셀)를 먼저 훑는다.
-    combined = {}
+    # combined_str: 문자열·날짜 기반 (우선순위 높음)
+    # combined_num: 정수·실수 기반 (우선순위 낮음 — 연간 FY 열 보완용)
+    combined_str, combined_num = {}, {}
     for r in range(1, maxscan + 1):
         text_hits, num_hits = {}, {}
         for c in range(1, ws.max_column + 1):
@@ -131,10 +148,15 @@ def period_columns(ws, maxscan=12, default_year=None):
         # 문자열 헤더('25.4Q', '2025 Q4', 날짜셀)는 한 개만 있어도 믿는다.
         # 숫자형(25.12)은 본문 숫자와 구분이 안 되므로 한 행에 2개 이상일 때만 인정한다.
         for c, yp in text_hits.items():
-            combined.setdefault(c, yp)
+            combined_str.setdefault(c, yp)
         if len(num_hits) >= 2:
             for c, yp in num_hits.items():
-                combined.setdefault(c, yp)
+                combined_num.setdefault(c, yp)
+    # 병합: 문자열이 정수를 덮어쓴다 (현대해상처럼 정수 연도 옆에 '누계' 문자열이
+    # 같은 (year,'FY') 키를 가질 때 문자열 열이 우선)
+    combined = dict(combined_num)
+    for c, yp in combined_str.items():
+        combined[c] = yp
 
     # ② 연도행 + 기간행 방식
     prow = None
@@ -146,8 +168,23 @@ def period_columns(ws, maxscan=12, default_year=None):
             break
     if not prow:
         out = {}
-        for c, (y, p) in sorted(combined.items()):
+        # 문자열 기반 먼저 (누계·datetime 등 신뢰도 높음)
+        for c, (y, p) in sorted(combined_str.items()):
             out.setdefault((y, p), c)
+        # 정수 기반은 문자열이 채우지 못한 FY 열만 보완
+        for c, (y, p) in sorted(combined_num.items()):
+            out.setdefault((y, p), c)
+        # 연도만 적힌 헤더로 FY 열 보완 (메리츠화재 Insurance_PL 등).
+        # combined_str 에 이미 있는 열(datetime 기반)은 건너뛴다 — 그 열은 연간이
+        # 아니라 분기 기간 열이기 때문이다 (동양생명 FS 'FY25' 오인 방지).
+        for r in range(1, maxscan + 1):
+            ys = {c: _norm_year(ws.cell(r, c).value) for c in range(1, ws.max_column + 1)}
+            ys = {c: y for c, y in ys.items() if y}
+            if len(ys) >= 2:
+                for c, y in sorted(ys.items()):
+                    if c not in combined_str:   # datetime 기반 열 제외
+                        out.setdefault((y, 'FY'), c)
+                break
         if not out:
             # 분기 없이 연도만 적힌 표(삼성생명 Ⅰ-1 의 'FY24 | FY25')는 FY 열로 본다.
             for r in range(1, maxscan + 1):
@@ -180,8 +217,15 @@ def period_columns(ws, maxscan=12, default_year=None):
     out, year = {}, None
     for c in range(1, ws.max_column + 1):
         if c in combined:
-            out.setdefault(combined[c], c)
-            year = combined[c][0]      # 이후 '2Q','3Q' 처럼 연도 없는 칸에 물려준다
+            year = combined[c][0]
+            # prow에 분기 레이블이 있으면 그것을 우선한다.
+            # (정수 연도 section-header가 combined에 들어왔을 때,
+            #  그 열의 실제 period는 prow의 레이블이 맞기 때문)
+            p_at_prow = _norm_period(ws.cell(prow, c).value) if prow else None
+            if p_at_prow:
+                out.setdefault((year, p_at_prow), c)
+            else:
+                out.setdefault(combined[c], c)
             continue
         if c in ymap:
             year = ymap[c]
@@ -266,7 +310,9 @@ SPECS = {
 
     # 한화생명 팩트시트는 분기 파일마다 시트명이 '요약 손익계산서' ↔ '(별도) 요약
     # 손익계산서' 로 바뀐다 → 같은 컬럼을 두 이름으로 모두 걸어 둔다(하나만 맞으면 됨).
-    '한화생명': {'unit': 1000, 'items': [
+    '한화생명': {'unit': 1000,
+                 'derived': {107: (109, 108, '/')},
+                 'items': [
         Item('운용자산',        '자산계',           21, POINT),
         Item('요약 손익계산서', '예실차',          111),
         Item('요약 손익계산서', '보험금 예실차',   112),
@@ -274,6 +320,7 @@ SPECS = {
         Item('(별도) 요약 손익계산서', '예실차',        111),
         Item('(별도) 요약 손익계산서', '보험금 예실차', 112),
         Item('(별도) 요약 손익계산서', '사업비 예실차', 115),
+        Item('효율지표', '사고보험금',   109),
         Item('(별도) 요약 손익계산서', '보험손익',      48),
         Item('(별도) 요약 손익계산서', '당기순이익',    44),
         Item('요약 손익계산서', '보험손익',   48),
@@ -292,17 +339,37 @@ SPECS = {
         Item('보험부채 Movement', '기말 보험계약마진', 80, PRIOR_FY, section='■ 보험계약마진(CSM)'),
     ]},
 
-    '메리츠화재': {'unit': 100, 'items': [
+    '메리츠화재': {'unit': 100,
+                  'derived': {114: (931, 932, '+'),   # Col114 = 발생보험금 + 발생사고요소조정
+                              939: (933, 934, '+'),   # 예상사업비 중간합 (temp)
+                              116: (939, 935, '+'),   # Col116 = 예상손해조사비+유지비+투자관리비
+                              940: (936, 937, '+'),   # 실제사업비 중간합 (temp)
+                              117: (940, 938, '+'),   # Col117 = 발생손해조사비+유지비+투자관리비
+                              112: (113, 114),        # 보험금예실차 = 예상-실제
+                              115: (116, 117)},       # 사업비예실차 = 예상-실제
+                  'items': [
         Item('CSM', '기말 CSM',  75, POINT),
         Item('CSM', '신계약 CSM', 76),
         Item('CSM', 'CSM 상각',  77, CUM, -1),
         Item('CSM', '경험조정 등', 78),
         Item('CSM', '이자비용',   79),
         Item('CSM', '기말 CSM',  80, PRIOR_FY),
+        # Insurance_PL (원 단위 → unit=1e-6, POINT 모드로 YTD 누계열 직접 선택)
+        Item('Insurance_PL', '가.예상발생보험금',  113, POINT, unit=1e-6),
+        Item('Insurance_PL', '가.발생보험금',      931, POINT, unit=1e-6),  # temp for Col114
+        Item('Insurance_PL', '바.발생사고요소조정', 932, POINT, unit=1e-6),  # temp (음수값)
+        Item('Insurance_PL', '나.예상손해조사비',  933, POINT, unit=1e-6),  # temp for Col116
+        Item('Insurance_PL', '다.예상계약유지비',  934, POINT, unit=1e-6),  # temp
+        Item('Insurance_PL', '라.예상투자관리비',  935, POINT, unit=1e-6),  # temp
+        Item('Insurance_PL', '나.발생손해조사비',  936, POINT, unit=1e-6),  # temp for Col117
+        Item('Insurance_PL', '다.발생계약유지비',  937, POINT, unit=1e-6),  # temp
+        Item('Insurance_PL', '라.발생투자관리비',  938, POINT, unit=1e-6),  # temp
     ]},
 
     '삼성생명': {'unit': 1000,
-                 'derived': {107: (109, 108, '/')},
+                 'derived': {107: (109, 108, '/'),
+                             112: (113, 114),   # 보험금예실차 = 예상-실제
+                             115: (116, 117)},  # 사업비예실차 = 예상-실제
                  'items': [
         Item('Ⅰ-6', '위험보험료',     108),
         Item('Ⅰ-6', '사고보험금1)',   109),
@@ -315,10 +382,19 @@ SPECS = {
         Item('Ⅰ-2', '예실차',         111),
         Item('Ⅰ-3', '기말 BEL',       73, POINT),
         Item('Ⅰ-3', '기말 RA',        74, POINT),
+        # Ⅴ-4 별도 손익계산서 (백만원 단위 → unit=1)
+        Item('Ⅴ-4', '가.예상당기보험금',         113, unit=1),
+        Item('Ⅴ-4', '나.예상당기계약유지관리비',  116, unit=1),
+        Item('Ⅴ-4', '가.당기발생보험금',         114, unit=1),
+        Item('Ⅴ-4', '나.계약유지관리비',         117, unit=1),
     ]},
 
     '동양생명': {'unit': 1000,
-                 'derived': {92: (93, 94, '/')},
+                 'derived': {92: (93, 94, '/'), 107: (109, 108, '/'),
+                             114: (113, 112),           # Col114 = Col113 - Col112
+                             904: (901, 902, '+'),       # 예상사업비 중간합 (temp)
+                             116: (904, 903, '+'),       # Col116 = 예상(손해조사+유지+투자관리)
+                             117: (116, 115)},           # Col117 = Col116 - Col115
                  'items': [
         Item('Stability', '지급여력금액 (Available Capital) (A)', 93, POINT),
         Item('Stability', '지급여력기준금액 (Required Capital) (B)', 94, POINT),
@@ -335,6 +411,13 @@ SPECS = {
         Item('FS', '예실차 (Difference between estimated and actual)', 111),
         Item('FS', '보험금예실차 (Claims experience variance)',        112),
         Item('FS', '사업비예실차 (Expense experience variance)',       115),
+        Item('Productivity', '위험보험료', 108, POINT),
+        Item('Productivity', '사고보험금', 109, POINT),
+        # IS K-IFRS 시트는 원(KRW) 단위 → unit=1e-6 으로 백만원 변환
+        Item('IS  K-IFRS', '가. 예상 발생보험금 (Expected incurred claims)',           113, POINT, unit=1e-6),
+        Item('IS  K-IFRS', '나. 예상 손해조사비용 (Expected claims investigation cost)', 901, POINT, unit=1e-6),
+        Item('IS  K-IFRS', '다. 예상 유지비용 (Expected maintenance cost)',             902, POINT, unit=1e-6),
+        Item('IS  K-IFRS', '라. 예상 투자관리비용 (Expected investment management cost)', 903, POINT, unit=1e-6),
     ]},
 
     # 현대해상 팩트시트는 백만원 단위로 적혀 있다(unit=1).
@@ -379,7 +462,8 @@ SPECS = {
     ]},
 
     '삼성화재': {'unit': 100,
-                 'derived': {95: (96, 97, '/'), 92: (93, 94, '/')},
+                 'derived': {95: (96, 97, '/'), 92: (93, 94, '/'),
+                             111: (112, 115, '+')},
                  'items': [
         Item('Capital Ratio',      '가용자본',        96, POINT),
         Item('Capital Ratio',      '요구자본',        97, POINT),
@@ -401,6 +485,11 @@ SPECS = {
         Item('CSM', '기말 CSM',   80, PRIOR_FY),
         Item('Profit & Loss Breakdown', '보험금 예실차', 112),
         Item('Profit & Loss Breakdown', '사업비 예실차', 115),
+        Item('Profit & Loss Breakdown', ' 예상손해액',   113, section=' 보험금 예실차'),
+        Item('Profit & Loss Breakdown', ' 발생손해액',   114, section=' 보험금 예실차'),
+        Item('Profit & Loss Breakdown', ' 예상사업비',   116, section=' 사업비 예실차'),
+        Item('Profit & Loss Breakdown', ' 실제사업비',   117, section=' 사업비 예실차'),
+        Item('Profit & Loss Breakdown', ' 위험보험료2)', 108, section='참고) 장기보험 순위험손해율'),
     ]},
 }
 
