@@ -396,7 +396,8 @@ def parse_prior_csm(xbrl_path, target_year="2025"):
 
     # 패턴A: 3-dim entity-specific disagg + ContractualServiceMarginMember
     total_a = 0.0
-    target_ctxs_a = set()
+    target_ctxs_a = set()   # 3-dim 우선
+    target_ctxs_a2 = set()  # 5-dim fallback (3-dim이 없을 때만 사용)
     # 패턴B: 2-dim (Separate+IssuedMember) + ContractualServiceMargin tag
     total_b = None
 
@@ -439,6 +440,7 @@ def parse_prior_csm(xbrl_path, target_year="2025"):
             target_ctxs_a.add(ctx.get("id", ""))
 
         # 패턴A2(미래에셋): 5-dim Separate+IssuedMember+InsuranceContractsAxis+TypesAx+CSMMember
+        # 3-dim 패턴A가 없을 때만 사용 (3-dim과 5-dim이 동일 값을 중복 저장하므로)
         elif len(members) == 5:
             csm_comp = dims.get("InsuranceContractsByComponentsAxis", "")
             disagg = dims.get("DisaggregationOfInsuranceContractsAxis", "")
@@ -453,7 +455,7 @@ def parse_prior_csm(xbrl_path, target_year="2025"):
                                              "DividendContractOfTypesOfContracts"))
                                for v in dims.values())
                 if not _is_div5:
-                    target_ctxs_a.add(ctx.get("id", ""))
+                    target_ctxs_a2.add(ctx.get("id", ""))
 
         # 패턴B: 2-dim (Separate + IssuedMember)
         elif len(members) == 2:
@@ -470,9 +472,11 @@ def parse_prior_csm(xbrl_path, target_year="2025"):
                             pass
 
 
+    # 3-dim 우선, 없으면 5-dim(A2) 사용
+    active_ctxs = target_ctxs_a if target_ctxs_a else target_ctxs_a2
     for elem in root:
         ctx_ref = elem.get("contextRef", "")
-        if ctx_ref not in target_ctxs_a or not elem.text:
+        if ctx_ref not in active_ctxs or not elem.text:
             continue
         tag = elem.tag.split("}")[-1] if "}" in elem.tag else elem.tag
         if tag in ("InsuranceContractsIssuedThatAreLiabilities",
