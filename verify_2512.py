@@ -2,6 +2,7 @@
 data_sheet_{period}.csv vs DATA 시트 정답 비교 검증 스크립트
 """
 import csv
+import os
 import openpyxl
 from openpyxl.styles import PatternFill
 from openpyxl.utils import get_column_letter
@@ -16,7 +17,7 @@ args, _ = parser.parse_known_args()
 
 PERIOD = args.period
 ANSWER_FILE = "202512_동업사 공시비교_DATA_작업_260320.xlsx"
-OUTPUT_CSV = f"data/data_sheet_{PERIOD}.csv"
+OUTPUT_CSV = f"data/data_sheet_{PERIOD}_ir.csv" if os.path.exists(f"data/data_sheet_{PERIOD}_ir.csv") else f"data/data_sheet_{PERIOD}.csv"
 
 
 def load_answer():
