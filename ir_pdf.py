@@ -188,7 +188,12 @@ def parse_disclosure(path, year=None):
         src[col] = where
 
     with pdfplumber.open(path) as pdf:
-        pages = [(i + 1, p.extract_text() or '') for i, p in enumerate(pdf.pages)]
+        pages = []
+        for i, p in enumerate(pdf.pages):
+            try:
+                pages.append((i + 1, p.extract_text() or ''))
+            except Exception:
+                pages.append((i + 1, ''))
 
     # ---- ① 회계모형별·포트폴리오별 보험부채 현황 → CSM 잔액(Col75)
     for pno, txt in pages:

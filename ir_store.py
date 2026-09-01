@@ -28,9 +28,13 @@ SHEET_SIGNATURES = {
 }
 
 # PDF 는 파일명/본문 키워드로 판별한다.
+# 폴더명은 ir_fill.SHORT 의 키와 같아야 한다 (KB라이프 → 'KB생명', 신한라이프 → '신한라이프생명').
 PDF_HINTS = [
     ('교보생명',   ['교보생명']),
     ('DB손해보험', ['DB Insurance', 'DB손해보험', '경영실적 및']),
+    ('KB손해보험', ['KB손해보험', 'KB손보']),
+    ('KB생명',     ['KB라이프', 'KB생명']),
+    ('신한라이프생명', ['신한라이프', '신한생명']),
     ('KB금융지주', ['PT_KOR', 'Factbook', 'KB금융']),
     ('삼성생명',   ['SLI ']),
     ('삼성화재',   ['SFMI', '삼성화재']),
@@ -66,12 +70,29 @@ def identify_pdf(path):
     for comp, keys in PDF_HINTS:
         if any(k.lower() in base.lower() for k in keys):
             return comp
+    # 신한라이프 경영공시는 파일명이 '2025년 년결산.pdf' 처럼 회사명이 없다.
+    # 경영공시로 보이는 이름이면 첫 장 본문에서 회사명을 찾는다.
+    if re.search(r'현황|결산|경영공시', base):
+        try:
+            import pdfplumber
+            with pdfplumber.open(path) as pdf:
+                head = ' '.join((p.extract_text() or '') for p in pdf.pages[:2])
+        except Exception:
+            return None
+        for comp, keys in PDF_HINTS:
+            if any(k in head for k in keys):
+                return comp
     return None
 
 
 def period_from_name(name):
     """파일명에서 기간코드를 추정한다. 못 찾으면 None."""
     pats = [
+        # 한국어 분기/반기/결산 패턴 (경영공시 PDF 파일명용)
+        (r'(20\d\d)\D{0,3}([1-4])분기',  lambda m: (int(m.group(1)), int(m.group(2)))),
+        (r'(20\d\d)\D{0,3}(?:상반기|반기)', lambda m: (int(m.group(1)), 2)),
+        (r'(20\d\d)\D{0,3}(?:년?결산)',  lambda m: (int(m.group(1)), 4)),
+        # 영문 패턴
         (r'(20\d\d)[^\d]{0,3}([1-4])Q', lambda m: (int(m.group(1)), int(m.group(2)))),
         (r'(\d\d)\.([1-4])Q',           lambda m: (2000 + int(m.group(1)), int(m.group(2)))),
         (r'(20\d\d)\D{0,3}Q([1-4])',    lambda m: (int(m.group(1)), int(m.group(2)))),
@@ -98,7 +119,7 @@ KIND = {'.xlsx': '팩트시트', '.pdf': '발표자료'}
 
 def kind_of(comp, ext, name):
     if ext == '.pdf':
-        if '공시' in name:
+        if '공시' in name or re.search(r'현황|결산', name):
             return '경영공시'
         if 'factbook' in name.lower():
             return '팩트북'
