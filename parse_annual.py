@@ -2235,9 +2235,9 @@ def _extract_components_from_doc_q1(filepath):
     return None, None, None
 
 
-def _get_q1_doc_path(corp_name, year):
-    """분기보고서 doc.xml 경로 반환. 없으면 다운로드 시도. 실패시 None."""
-    cache_path = os.path.join("data", corp_name, f"doc_1q_{year}.xml")
+def _get_q1_doc_path(corp_name, year, month="03"):
+    """Period-specific quarter XML. Legacy doc_1q caches may contain Q3 data."""
+    cache_path = os.path.join("data", corp_name, f"doc_{str(year)[2:]}{month}.xml")
     if os.path.exists(cache_path):
         return cache_path
 
@@ -2248,7 +2248,7 @@ def _get_q1_doc_path(corp_name, year):
     try:
         from dart_api import find_rcept_no, _fetch_document_content
         os.makedirs(os.path.dirname(cache_path), exist_ok=True)
-        rcept_no = find_rcept_no(corp_code, year, "11013")
+        rcept_no = find_rcept_no(corp_code, year, "11014" if month == "09" else "11013")
         content = _fetch_document_content(rcept_no)
         with open(cache_path, "w", encoding="utf-8") as f:
             f.write(content)
@@ -2842,15 +2842,22 @@ def _extract_kics(filepath):
     def _fix_unit(lst):
         return [v * 100 if v < 100000 else v for v in lst]
 
-    def _build_result(ratios, avails, reqs):
+    def _build_result(ratios, avails, reqs, context):
         if not ratios or not avails or not reqs:
             return {}
         avails = _fix_unit(avails)
         reqs = _fix_unit(reqs)
         r = {}
-        if ratios: r[95] = ratios[0]; r[92] = ratios[0]
-        if avails: r[96] = avails[0]; r[93] = avails[0]
-        if reqs:   r[97] = reqs[0];  r[94] = reqs[0]
+        # A provisional annual disclosure is not also a final value. Bind
+        # status to this table and its own footnotes, not another subsidiary.
+        compact=re.sub(r'\s+|<[^>]*>', '', context)
+        provisional=bool(re.search(r'잠정|미확정|산출중|외부검증.{0,35}완료되지',compact))
+        if provisional:
+            r.update({92:ratios[0],93:avails[0],94:reqs[0]})
+        else:
+            # Preserve legacy extraction for unclassified tables; the PDF
+            # reviewer must still establish status before marking verified.
+            r.update({92:ratios[0],93:avails[0],94:reqs[0],95:ratios[0],96:avails[0],97:reqs[0]})
         return r
 
     def _parse_table_cells(text):
@@ -2900,7 +2907,9 @@ def _extract_kics(filepath):
         if '개선권고' in text[:200] or '경영개선' in text[:200]:
             continue
         ratios, avails, reqs = _parse_table_cells(text)
-        r = _build_result(ratios, avails, reqs)
+        next_table=table_pattern.search(content,m.end())
+        footnote_end=min(m.end()+2000,next_table.start() if next_table else len(content))
+        r = _build_result(ratios, avails, reqs,content[m.start():footnote_end])
         if r:
             return r
 
@@ -2916,7 +2925,7 @@ def _extract_kics(filepath):
         text = re.sub(r'\|[\s|]+\|', '|', text)
         text = re.sub(r'\s+', ' ', text).strip()
         ratios, avails, reqs = _parse_table_cells(text)
-        r = _build_result(ratios, avails, reqs)
+        r = _build_result(ratios, avails, reqs,region)
         if r:
             return r
 
@@ -4021,11 +4030,11 @@ def parse_surrender_reserve(xbrl_path, target_year="2025", ref_date=None, start_
     return best_b or best_b_added
 
 
-def extract_company_data(corp_name, year="2025", report_type="사업보고서", month="12"):
+def extract_company_data(corp_name, year="2025", report_type="사업보고서", month="12", xbrl_path=None):
     """한 회사의 보고서에서 DATA 시트에 필요한 모든 값 추출.
     month: 보고서 결산월 ("03"=1분기, "06"=반기, "09"=3분기, "12"=사업보고서)
     """
-    xbrl_path = find_xbrl_file(corp_name, report_type, year)
+    xbrl_path = xbrl_path or find_xbrl_file(corp_name, report_type, year)
     if not xbrl_path:
         print(f"  ERROR: XBRL not found for {corp_name} ({report_type} {year})")
         return None
@@ -4622,7 +4631,7 @@ def extract_company_data(corp_name, year="2025", report_type="사업보고서", 
         # 3분기(2509)는 doc_1q_{year}.xml에서 OCI세부/CSM기간별 추출 가능
         # doc_1q_{year}.xml 실체가 3분기보고서이므로 2509 기준 값이 들어있음
         if month == "09":
-            _q1_doc = _get_q1_doc_path(corp_name, year)
+            _q1_doc = _get_q1_doc_path(corp_name, year, month="09")
             if _q1_doc:
                 # OCI세부 (Col25~30)
                 _oci_doc = _extract_oci_detail(_q1_doc, oci_total=result.get(17))

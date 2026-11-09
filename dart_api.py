@@ -14,6 +14,41 @@ TAXONOMY_CSV = os.path.join("data", "taxonomy.csv")
 
 _corp_map = None  # 기업명 -> 기업코드 캐시
 
+def _get(url, **kwargs):
+    """Bounded API requests and optional redacted response traces for quarterly runs."""
+    if os.getenv("DART_OFFLINE") == "1":
+        raise RuntimeError("Offline mode")
+    params = kwargs.get("params", {})
+    if "opendart.fss.or.kr" in url and not params.get("crtfc_key"):
+        raise RuntimeError("DART_API_KEY is not configured")
+    if "fisis.fss.or.kr" in url and not params.get("auth"):
+        raise RuntimeError("FISIS_API_KEY is not configured")
+    if "fisis.fss.or.kr" in url and os.getenv("ENABLE_FISIS", "0") != "1":
+        raise RuntimeError("FISIS is disabled")
+    kwargs.setdefault("timeout", (10, 30))
+    try:
+        response = requests.Session().get(url, **kwargs)
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        # Requests exception strings can contain the complete URL, including API keys.
+        raise RuntimeError(f"API request failed ({type(exc).__name__})") from None
+    trace = os.getenv("DART_TRACE_DIR")
+    if trace:
+        import json, hashlib
+        from pathlib import Path
+        safe = {k: v for k, v in params.items() if k not in ("crtfc_key", "auth")}
+        identity = json.dumps([url, safe], sort_keys=True).encode()
+        dest = Path(trace)
+        dest.mkdir(parents=True, exist_ok=True)
+        name = hashlib.sha256(identity).hexdigest()[:20]
+        try:
+            data = response.json()
+        except ValueError:
+            data = {"binary_size": len(response.content)}
+        (dest / (name + ".json")).write_text(json.dumps({"url": url, "params": safe, "response": data}, ensure_ascii=False), encoding="utf-8")
+    return response
+
+
 
 def build_taxonomy_from_lab(lab_ko_path: str) -> dict:
     """_lab-ko.xml 파싱해서 account_id -> 한글명 매핑 반환"""
@@ -261,7 +296,7 @@ def _load_corp_map():
     if _corp_map is not None:
         return _corp_map
 
-    response = requests.get(f"{BASE_URL}/corpCode.xml", params={"crtfc_key": API_KEY})
+    response = _get(f"{BASE_URL}/corpCode.xml", params={"crtfc_key": API_KEY})
     response.raise_for_status()
 
     with zipfile.ZipFile(io.BytesIO(response.content)) as z:
@@ -314,7 +349,7 @@ def get_disclosures(corp_code: str = None, bgn_de: str = None, end_de: str = Non
     if end_de:
         params["end_de"] = end_de
 
-    response = requests.get(f"{BASE_URL}/list.json", params=params)
+    response = _get(f"{BASE_URL}/list.json", params=params)
     response.raise_for_status()
     return response.json()
 
@@ -325,7 +360,7 @@ def get_company_info(corp_code: str):
         "crtfc_key": API_KEY,
         "corp_code": corp_code,
     }
-    response = requests.get(f"{BASE_URL}/company.json", params=params)
+    response = _get(f"{BASE_URL}/company.json", params=params)
     response.raise_for_status()
     return response.json()
 
@@ -354,38 +389,39 @@ def get_financial_statements(corp_code: str, bsns_year: str, reprt_code: str = "
         "reprt_code": reprt_code,
         "fs_div": fs_div,
     }
-    response = requests.get(f"{BASE_URL}/fnlttSinglAcntAll.json", params=params)
+    response = _get(f"{BASE_URL}/fnlttSinglAcntAll.json", params=params)
     response.raise_for_status()
     return response.json()
 
 
 def find_rcept_no(corp_code: str, bsns_year: str, reprt_code: str = "11012") -> str:
-    """공시 목록에서 해당 보고서의 접수번호(rcept_no) 찾기"""
-    bgn_de = f"{bsns_year}0101"
-    end_de = f"{bsns_year}1231"
-
-    report_keyword_map = {"11011": "사업보고서", "11012": "반기보고서", "11013": "분기보고서", "11014": "분기보고서"}
-    target_keyword = report_keyword_map.get(reprt_code, "")
-
-    # 전체 목록에서 원본(기재정정 아닌 것) 우선 탐색
-    data = get_disclosures(corp_code=corp_code, bgn_de=bgn_de, end_de=end_de, page_count=100, last_reprt_at="N")
-    items = data.get("list", [])
-    candidates = [item for item in items if target_keyword in item.get("report_nm", "")]
-
+    """Choose the latest exact accounting period, including subsequent corrections."""
+    from quarterly.core import Period, korea_now
+    q = {"11013": 1, "11012": 2, "11014": 3, "11011": 4}[reprt_code]
+    period = Period(int(bsns_year), q)
+    candidates = []
+    for page in range(1, 51):
+        data = get_disclosures(corp_code=corp_code, bgn_de=f"{bsns_year}0101",
+                               end_de=korea_now().strftime("%Y%m%d"), page_no=page,
+                               page_count=100, last_reprt_at="N")
+        status = data.get("status")
+        if status == "013":
+            break
+        if status != "000":
+            raise ValueError(f"DART API status: {status}")
+        candidates.extend(i for i in data.get("list", []) if period.matches_report(i.get("report_nm", "")))
+        if page >= int(data.get("total_page", 1)):
+            break
     if not candidates:
-        raise ValueError(f"해당 보고서를 찾을 수 없습니다. (연도: {bsns_year}, 코드: {reprt_code})")
-
-    # 가장 최근 제출본 선택 (기재정정 포함)
-    selected = max(candidates, key=lambda x: x.get("rcept_dt", ""))
-
-    print(f"보고서 선택: {selected['report_nm']} ({selected['rcept_dt']})")
+        raise ValueError(f"Report not published: {period.code}")
+    selected = max(candidates, key=lambda i: (i.get("rcept_dt", ""), i["rcept_no"]))
     return selected["rcept_no"]
 
 
 def _fetch_document_content(rcept_no: str) -> str:
     """document.xml ZIP에서 본문 XML 문자열 반환"""
     import re as _re
-    resp = requests.get(f"{BASE_URL}/document.xml", params={"crtfc_key": API_KEY, "rcept_no": rcept_no})
+    resp = _get(f"{BASE_URL}/document.xml", params={"crtfc_key": API_KEY, "rcept_no": rcept_no})
     if not resp.content.startswith(b"PK"):
         raise ValueError(f"document.xml 응답 오류: {resp.content[:100]}")
     with zipfile.ZipFile(io.BytesIO(resp.content)) as z:
@@ -473,7 +509,7 @@ def download_xbrl(rcept_no: str, corp_name: str, reprt_name: str, year: str, rep
         "rcept_no": rcept_no,
         "reprt_code": reprt_code,
     }
-    response = requests.get(f"{BASE_URL}/fnlttXbrl.xml", params=params)
+    response = _get(f"{BASE_URL}/fnlttXbrl.xml", params=params)
     response.raise_for_status()
 
     # ZIP이 아니면 API 에러 메시지 출력
@@ -491,8 +527,8 @@ def download_xbrl(rcept_no: str, corp_name: str, reprt_name: str, year: str, rep
     return save_path
 
 
-FISIS_API_KEY = "7b145068523cd3c2642e8b902a21999d"
-FISIS_BASE = "http://fisis.fss.or.kr/openapi"
+FISIS_API_KEY = os.getenv("FISIS_API_KEY", "")
+FISIS_BASE = os.getenv("FISIS_BASE_URL", "https://fisis.fss.or.kr/openapi")
 
 # 12개사 FISIS 코드 (finance_cd, lrgDiv)
 FISIS_CORP_CODES = {
@@ -524,7 +560,7 @@ def fetch_fisis_kics(corp_name: str, base_month: str) -> dict:
     finance_cd, lrg_div = entry
     list_no = "SH021" if lrg_div == "H" else "SI021"
     try:
-        r = _req.get(f"{FISIS_BASE}/statisticsInfoSearch.json", params={
+        r = _get(f"{FISIS_BASE}/statisticsInfoSearch.json", params={
             "lang": "kr", "auth": FISIS_API_KEY,
             "financeCd": finance_cd, "listNo": list_no,
             "term": "Q", "startBaseMm": base_month, "endBaseMm": base_month,
@@ -537,7 +573,7 @@ def fetch_fisis_kics(corp_name: str, base_month: str) -> dict:
     ratio = avail = req = None
     for it in items:
         v = it.get("a", "")
-        if not v or v == "0":
+        if v in (None, ""):
             continue
         try:
             fv = float(v)
@@ -575,7 +611,7 @@ def fetch_fisis_balance(corp_name: str, base_month: str) -> dict:
 
     def _fetch(list_no):
         try:
-            r = _req.get(f"{FISIS_BASE}/statisticsInfoSearch.json", params={
+            r = _get(f"{FISIS_BASE}/statisticsInfoSearch.json", params={
                 "lang": "kr", "auth": FISIS_API_KEY,
                 "financeCd": fcd, "listNo": list_no,
                 "term": "Q", "startBaseMm": base_month, "endBaseMm": base_month,
@@ -583,7 +619,7 @@ def fetch_fisis_balance(corp_name: str, base_month: str) -> dict:
             }, timeout=10)
             return {it["account_cd"]: float(it["a"])
                     for it in r.json().get("result", {}).get("list", [])
-                    if it.get("a") and it["a"] not in ("0", "")}
+                    if it.get("a") not in (None, "")}
         except Exception:
             return {}
 
@@ -594,8 +630,8 @@ def fetch_fisis_balance(corp_name: str, base_month: str) -> dict:
     if r_data:
         ra = r_data.get("A112", 0) + r_data.get("A122", 0)
         csm = r_data.get("A113", 0)
-        if ra:  result[74] = ra / 1e6
-        if csm: result[75] = csm / 1e6
+        if any(c in r_data for c in ("A112", "A122")): result[74] = ra / 1e6
+        if "A113" in r_data: result[75] = csm / 1e6
 
     # 재무상태표 자산 (운용자산, 총자산)
     # 한화생명/KB생명: FISIS A1 기준이 엑셀과 달라서 제외
@@ -624,12 +660,12 @@ def fetch_fisis_balance(corp_name: str, base_month: str) -> dict:
         f65 = b_data.get("F65", 0)   # Col27 재보험계약자산(부채)순금융손익
         f67 = b_data.get("F67", 0)   # Col28 현금흐름위험회피 (생보사만 정확)
         f69 = b_data.get("F69", 0)   # Col30 확정급여(보험수리적손익)
-        if hyb: result[16] = hyb / 1e6
-        if hyk: result[99] = hyk / 1e6
-        if f64: result[26] = f64 / 1e6
-        if f65: result[27] = f65 / 1e6
-        if f67 and is_life: result[28] = f67 / 1e6   # 생보사만: 손보사 F67은 기준 불일치
-        if f69: result[30] = f69 / 1e6
+        if "F3" in b_data: result[16] = hyb / 1e6
+        if "F46" in b_data: result[99] = hyk / 1e6
+        if "F64" in b_data: result[26] = f64 / 1e6
+        if "F65" in b_data: result[27] = f65 / 1e6
+        if "F67" in b_data and is_life: result[28] = f67 / 1e6   # 생보사만: 손보사 F67은 기준 불일치
+        if "F69" in b_data: result[30] = f69 / 1e6
 
     return result
 

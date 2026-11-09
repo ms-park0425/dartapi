@@ -1,0 +1,226 @@
+{
+  "version": 1,
+  "purpose": "2025년 개발 검증에서 얻은 의미·탐색 지침. 과거 정답 수치를 재사용하지 않는다.",
+  "rules": [
+    {
+      "id": "maturity-layout",
+      "fields": [
+        83,
+        84,
+        85,
+        86,
+        87
+      ],
+      "status": "confirmed_header_ambiguity",
+      "instruction": "엑셀의 84·85 다중 헤더에는 1~3년/3~5년과 1~2년/2~5년이 함께 있다. 회사별 기간구간을 먼저 결정하고 run_config.company_fields에 maturity_bounds_years를 기록. 연도별 상세 구간을 합산하며 서로 다른 구간을 같은 칸에 대입하지 않는다."
+    },
+    {
+      "id": "kyobo-maturity",
+      "companies": [
+        "교보생명"
+      ],
+      "fields": [
+        83,
+        84,
+        85,
+        86,
+        87
+      ],
+      "observed_periods": [
+        "2509"
+      ],
+      "status": "confirmed_after_scoring",
+      "instruction": "2509 정답본은 연결 보험계약 CSM 예상 인식 표와 1년이하·1~3년·3~5년·5~10년·10년초과 구간에 대응했다. 별도 표를 사용한 기존 결과는 보존. 다음 분기는 연결 표와 실제 구간을 재확인하고 해당 회사에만 basis=consolidated 정의를 적용. 다른 CSM 잔액·변동 칼럼의 별도 기준은 바꾸지 않는다.",
+      "navigation": "2509 DART PDF p110 연결 / p228 별도. 페이지는 고정하지 않는다."
+    },
+    {
+      "id": "parent-kics",
+      "fields": [
+        92,
+        93,
+        94,
+        95,
+        96,
+        97
+      ],
+      "status": "confirmed",
+      "instruction": "DART는 회사 본체와 국내외 자회사 K-ICS·RBC를 함께 싣는다. 회사 본체의 지급여력 표인지 확인. 삼성생명 태국법인, 한화 해외법인, DB생명 등 자회사 표를 본체로 오인하지 않는다. e/잠정과 최종 칼럼도 구분한다."
+    },
+    {
+      "id": "ratio-precision",
+      "fields": [
+        92,
+        95
+      ],
+      "status": "confirmed",
+      "instruction": "퍼센트 원문을 소수 비율로 변환. 정답본의 표시 반올림 차이와 추출 오류는 별개로 기록하고 정확도 수치를 높이려고 원문 정밀값을 반올림하지 않는다. 경계값도 원시 수치와 허용오차를 남긴다."
+    },
+    {
+      "id": "samsung-csm-sign",
+      "companies": [
+        "삼성생명"
+      ],
+      "fields": [
+        78
+      ],
+      "observed_periods": [
+        "2509"
+      ],
+      "status": "reference_disagreement_unresolved",
+      "instruction": "2509 CSM 조정은 IR의 음수 부호와 정답본의 양수가 달랐다. 정답 오류로 단정하지 않는다. 현재 분기 원문 부호·동일 범위 변동식·표시 규약을 다시 확인. 동일 지표 부호 오류가 입증되면 기존 정밀 크기는 유지하고 부호만 수정."
+    },
+    {
+      "id": "meritz-opening",
+      "companies": [
+        "메리츠화재",
+        "DB손해보험"
+      ],
+      "fields": [
+        75,
+        76,
+        77,
+        78,
+        79,
+        80
+      ],
+      "status": "unresolved",
+      "instruction": "2509 CSM 변동 검산 문제가 남았다. 기초잔액/원수·보유/재보험/연결·별도/분기·누계를 먼저 대조. 검산을 맞추려고 조정항목을 역산하지 않는다. 메리츠 IR의 분기와 누계 그림을 구분."
+    },
+    {
+      "id": "shinhan-net-schedule",
+      "companies": [
+        "신한라이프생명"
+      ],
+      "fields": [
+        83,
+        84,
+        85,
+        86,
+        87
+      ],
+      "status": "confirmed_scope_difference",
+      "instruction": "기간별 CSM 표의 이자차감 후 순상각 각주를 확인. 순상각 표는 기대수익 총인식 표와 동일하지 않으므로 그대로 대입하지 않는다."
+    },
+    {
+      "id": "hanwha-ytd",
+      "companies": [
+        "한화생명"
+      ],
+      "fields": [
+        76,
+        77,
+        78,
+        79
+      ],
+      "status": "confirmed",
+      "instruction": "IR의 분기별 표에서 YTD를 만들 때 실제 1분기부터 대상 분기까지의 해당 항목만 합산. 이미 누계인 값은 재합산 금지. GMM/VFA, 금융/비금융 가정 항목 범위를 확인."
+    },
+    {
+      "id": "kb-group-entity",
+      "companies": [
+        "KB생명",
+        "KB손해보험"
+      ],
+      "fields": [
+        73,
+        74,
+        75,
+        76,
+        77,
+        78,
+        79,
+        80,
+        92,
+        93,
+        94,
+        95,
+        96,
+        97
+      ],
+      "status": "confirmed",
+      "instruction": "KB금융 통합 팩트북의 자회사 제목을 확인. KB라이프와 KB손보를 교차 대입하지 않는다. 이자+기타 통합 값은 개별 이자나 조정으로 임의 분할하지 않는다."
+    },
+    {
+      "id": "precise-vs-rounded",
+      "status": "confirmed",
+      "instruction": "같은 정의의 정밀값을 우선하며 PDF 반올림 범위 내면 KEEP. 서로 호환되는 복수 PDF는 좁은 반올림 구간의 수치를 우선. 범위 밖 차이는 오류 입증 없이는 CONFLICT."
+    },
+    {
+      "id": "collection",
+      "status": "live_checked_2503",
+      "instruction": "DART PDF는 일반 Mozilla User-Agent, 동일 세션에서 공식 PDF 다운로드 main.do를 연 다음 Referer를 넣어 pdf.do 요청. API XBRL 성공과 PDF 성공은 따로 확인. 삼성생명은 form POST 파일 API response 배열, 메리츠는 조회연도 result의 정확한 분기 제목 선택. 최상단 최신 자료를 사용하지 않는다."
+    },
+    {
+      "id": "net-csm-model-table",
+      "fields": [
+        73,
+        74,
+        75,
+        80
+      ],
+      "observed_periods": [
+        "2503",
+        "2506"
+      ],
+      "status": "confirmed_scope_difference",
+      "instruction": "회계모형별 표의 합계는 원수·수재 기준일 수 있다. 순부채/순보유 목표에 곧바로 쓰지 않는다. KB손보의 순보유 각주와 KB라이프·신한의 원수/수재 각주를 구분. 재보험 CSM·자산 차감 범위를 확인하기 전 빈칸을 총액으로 채우지 않는다."
+    },
+    {
+      "id": "hanwha-transition",
+      "companies": [
+        "한화생명"
+      ],
+      "fields": [
+        95,
+        96,
+        97
+      ],
+      "observed_periods": [
+        "2506"
+      ],
+      "status": "confirmed_scope_difference",
+      "instruction": "반기 DART 본문 K-ICS는 공통 경과조치 적용 값이며 각주는 적용 전 비율을 별도로 제시했다. 본문 자본과 적용 전 비율을 혼합하지 않는다. 목표 기준을 먼저 확인하고 같은 기준의 비율·가용자본·요구자본 세 값을 사용."
+    },
+    {
+      "id": "partial-ytd-header",
+      "companies": [
+        "메리츠화재"
+      ],
+      "fields": [
+        76,
+        77,
+        78,
+        79
+      ],
+      "observed_periods": [
+        "2512"
+      ],
+      "status": "confirmed_parser_period_error",
+      "instruction": "2025 연간 재검토에서 FY YTD 옆의 3Q25 YTD·1H25 YTD를 FY로 덮어쓰던 오류를 확인했다. 명시적 분기/반기 YTD는 YTD_Qn으로 구분. 연간은 FY 또는 Q1~Q4 합계, 분기는 해당 누계 또는 해당 시점까지의 분기 합계만 사용. PDF로 기간을 대조한 뒤 동일 팩트시트의 정확한 누계 열 정밀값을 사용한다."
+    },
+    {
+      "id": "waterfall-amortization-sign",
+      "fields": [
+        77
+      ],
+      "status": "confirmed",
+      "instruction": "CSM 변동 그림의 상각은 음수로 그려질 수 있으나 DATA 상각은 양수 비용이다. raw_values는 원문 음수 그대로 기록하고 scale에 음수를 사용해 변환한다. 손익표의 양수 상각은 별도 부호 반전 없이 사용한다."
+    },
+    {
+      "id": "annual-provisional-duplicated-final",
+      "fields": [
+        92,
+        93,
+        94,
+        95,
+        96,
+        97
+      ],
+      "observed_periods": [
+        "2512"
+      ],
+      "status": "confirmed_parser_status_error_after_scoring",
+      "instruction": "DB 연간 원문은 외부검증 전 잠정치라고 명시했지만 기존 파서가 잠정/최종 두 묶음에 같은 값을 썼다. 명시적 잠정 표는 92~94만 쓰고 95~97은 별도 최종 공시에서 확인. 코드 차단을 추가했으나 확정한 2512 재시험 점수에는 소급 적용하지 않음."
+    }
+  ]
+}

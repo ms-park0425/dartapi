@@ -127,12 +127,18 @@ def _norm_year(v):
     return None
 
 
-def period_columns(ws, maxscan=12, default_year=None):
+def period_columns(ws, maxscan=12, default_year=None, prefer_detail=False):
     """{(연도, 'FY'|'Q1'..'Q4'): 엑셀 열번호}
 
     기간 라벨이 3개 이상인 행을 기간행으로 보고, 그 바로 위 행을 연도행으로 읽는다.
     연도 셀이 병합되어 있으면 병합 범위 전체에 그 연도를 전파한다.
     """
+    def put(key, column):
+        # Summary/YTD columns precede the quarter-detail block in many factsheets.
+        # CUM callers sum quarter values, so prefer the last matching detail column.
+        if prefer_detail or key not in out:
+            out[key] = column
+
     # ① 연도+기간을 한 칸에 담은 헤더(예: '25.4Q', 날짜셀)를 먼저 훑는다.
     # combined_str: 문자열·날짜 기반 (우선순위 높음)
     # combined_num: 정수·실수 기반 (우선순위 낮음 — 연간 FY 열 보완용)
@@ -170,10 +176,10 @@ def period_columns(ws, maxscan=12, default_year=None):
         out = {}
         # 문자열 기반 먼저 (누계·datetime 등 신뢰도 높음)
         for c, (y, p) in sorted(combined_str.items()):
-            out.setdefault((y, p), c)
+            put((y, p), c)
         # 정수 기반은 문자열이 채우지 못한 FY 열만 보완
         for c, (y, p) in sorted(combined_num.items()):
-            out.setdefault((y, p), c)
+            put((y, p), c)
         # 연도만 적힌 헤더로 FY 열 보완 (메리츠화재 Insurance_PL 등).
         # combined_str 에 이미 있는 열(datetime 기반)은 건너뛴다 — 그 열은 연간이
         # 아니라 분기 기간 열이기 때문이다 (동양생명 FS 'FY25' 오인 방지).
@@ -183,7 +189,7 @@ def period_columns(ws, maxscan=12, default_year=None):
             if len(ys) >= 2:
                 for c, y in sorted(ys.items()):
                     if c not in combined_str:   # datetime 기반 열 제외
-                        out.setdefault((y, 'FY'), c)
+                        put((y, 'FY'), c)
                 break
         if not out:
             # 분기 없이 연도만 적힌 표(삼성생명 Ⅰ-1 의 'FY24 | FY25')는 FY 열로 본다.
@@ -193,7 +199,7 @@ def period_columns(ws, maxscan=12, default_year=None):
                 ys = {c: y for c, y in ys.items() if y}
                 if len(ys) >= 2:
                     for c, y in sorted(ys.items()):
-                        out.setdefault((y, 'FY'), c)
+                        put((y, 'FY'), c)
                     break
         return out
     yrow = prow - 1
@@ -222,16 +228,21 @@ def period_columns(ws, maxscan=12, default_year=None):
             # (정수 연도 section-header가 combined에 들어왔을 때,
             #  그 열의 실제 period는 prow의 레이블이 맞기 때문)
             p_at_prow = _norm_period(ws.cell(prow, c).value) if prow else None
+            if p_at_prow == 'FY' and combined[c][1] in ('Q1','Q2','Q3'):
+                # An explicit 3Q25/1H25 header over YTD is partial-year
+                # cumulative data, never the annual FY column or a quarter flow.
+                put((year, 'YTD_' + combined[c][1]), c)
+                continue
             if p_at_prow:
-                out.setdefault((year, p_at_prow), c)
+                put((year, p_at_prow), c)
             else:
-                out.setdefault(combined[c], c)
+                put(combined[c], c)
             continue
         if c in ymap:
             year = ymap[c]
         p = _norm_period(ws.cell(prow, c).value)
         if year and p:
-            out.setdefault((year, p), c)
+            put((year, p), c)
     return out
 
 
@@ -504,7 +515,7 @@ def period_to_yq(period):
     return year, ('FY' if mm == 12 else 'Q%d' % (mm // 3))
 
 
-def extract(factsheet_path, period, items, unit=1000.0):
+def extract(factsheet_path, period, items, unit=1000.0, evidence=None):
     """팩트시트 1개에서 해당 기간의 {col: 백만원} 추출"""
     wb = load(factsheet_path)
     year, q = period_to_yq(period)
@@ -515,7 +526,7 @@ def extract(factsheet_path, period, items, unit=1000.0):
         if it.sheet not in wb.sheetnames:
             misses.append((it.col, it.label, 'no sheet'))
             continue
-        key = (it.sheet, it.section)
+        key = (it.sheet, it.section, it.mode == CUM)
         if key not in cache:
             ws = wb[it.sheet]
             start = 1
@@ -539,7 +550,7 @@ def extract(factsheet_path, period, items, unit=1000.0):
                         start = hits[idx]
             same = [x.label for x in items
                     if x.sheet == it.sheet and x.section == it.section]
-            cache[key] = (ws, period_columns(ws, default_year=year),
+            cache[key] = (ws, period_columns(ws, default_year=year, prefer_detail=(it.mode == CUM)),
                           label_row(ws, same, row_min=start))
         ws, pcols, rows = cache[key]
         r = rows.get(it.label)
@@ -547,9 +558,14 @@ def extract(factsheet_path, period, items, unit=1000.0):
             misses.append((it.col, it.label, 'no row'))
             continue
 
+        selected_cells = []
+
         def cell(yy, pp):
             c = pcols.get((yy, pp))
             v = ws.cell(r, c).value if c else None
+            if c and isinstance(v, (int, float)):
+                selected_cells.append({'sheet': it.sheet, 'cell': ws.cell(r, c).coordinate,
+                                       'raw_value': v, 'year': yy, 'period': pp})
             return v if isinstance(v, (int, float)) else None
 
         val = None
@@ -565,6 +581,8 @@ def extract(factsheet_path, period, items, unit=1000.0):
         elif it.mode == POINT:
             # 시점값. 연간이면 4분기말 우선(YTD 열이 잔액이 아닌 경우가 있음)
             val = cell(year, 'Q4') if q == 'FY' else cell(year, q)
+            if val is None and q != 'FY':
+                val = cell(year, 'YTD_' + q)
             if val is None and q == 'FY':
                 # 분기 열이 없는 연간 표에서만 FY 열로 넘어간다.
                 # (분기 요청에 연말값을 돌려주면 조용히 틀린 값이 들어간다)
@@ -572,6 +590,8 @@ def extract(factsheet_path, period, items, unit=1000.0):
         else:  # CUM — 연간누계
             if q == 'FY':
                 val = cell(year, 'FY')
+            else:
+                val = cell(year, 'YTD_' + q)
             if val is None:
                 n = 4 if q == 'FY' else QORDER.index(q) + 1
                 parts = [cell(year, QORDER[i]) for i in range(n)]
@@ -581,6 +601,9 @@ def extract(factsheet_path, period, items, unit=1000.0):
             misses.append((it.col, it.label, 'no value'))
         else:
             result[it.col] = val * it.sign * (it.unit if it.unit else unit)
+            if evidence is not None:
+                evidence.append({'field': it.col, 'label': it.label, 'cells': selected_cells,
+                                 'mode': it.mode, 'scale': it.sign * (it.unit if it.unit else unit)})
     wb.close()
     # 같은 컬럼을 여러 시트에서 시도했을 때(시트명이 파일마다 다른 경우)
     # 하나라도 성공했으면 나머지 실패는 잡음이므로 지운다.
@@ -588,11 +611,11 @@ def extract(factsheet_path, period, items, unit=1000.0):
     return result, misses
 
 
-def extract_company(company, factsheet_path, period):
+def extract_company(company, factsheet_path, period, evidence=None):
     spec = SPECS.get(company)
     if not spec:
         raise KeyError(f'매핑 미정의: {company}')
-    res, miss = extract(factsheet_path, period, spec['items'], float(spec['unit']))
+    res, miss = extract(factsheet_path, period, spec['items'], float(spec['unit']), evidence=evidence)
     # 파생 컬럼: {대상: (a, b)} → a − b,  {대상: (a, b, '/')} → a ÷ b
     for tgt, rule in (spec.get('derived') or {}).items():
         a, b = rule[0], rule[1]
@@ -601,6 +624,8 @@ def extract_company(company, factsheet_path, period):
             res[tgt] = ({'-': lambda x, y: x - y,
                          '+': lambda x, y: x + y,
                          '/': lambda x, y: x / y}[op])(res[a], res[b])
+            if evidence is not None:
+                evidence.append({'field': tgt, 'derived_from': [a, b], 'operation': op})
         else:
             miss.append((tgt, f'파생({a}{op}{b})', 'no source'))
     # 200번대는 파생 계산에만 쓰는 임시 컬럼이라 결과에서 뺀다

@@ -1,0 +1,15 @@
+{
+  "workbook": "2026_동업사 공시비교_DATA_작업_260901.xlsx",
+  "reference_workbook": "DATA_작업_빈칸_2512backup.xlsx",
+  "protect_through": "2512",
+  "use_fisis": false,
+  "codex": "codex",
+  "browser": false,
+  "ai_source_discovery": true,
+  "discovery_pages": 12,
+  "review_batch_pages": 4,
+  "review_timeout": 900,
+  "max_review_pages": 0,
+  "fields": {},
+  "sources": {}
+}
