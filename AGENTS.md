@@ -5,6 +5,10 @@ portable between users: do not rely on the prior chat or another user's absolute
 paths. Prefer the workbook supplied in the current request; otherwise use merged
 default/local settings through `quarter_pipeline.read_config`.
 
+Interpret a project-chat request such as "202609 분기보고서 채워줘" as
+2026 Q3 and pass the internal YYMM period `2609` to the program. Do not pass
+the six-digit conversational date directly to the CLI.
+
 For requests to populate a selected quarter, complete collection, first-pass entry,
 direct PDF inspection, corrections and the final workbook in this chat.
 Use the PDF skill when inspecting pages. Preserve the user's workbook layout and
@@ -60,7 +64,7 @@ revisions and uncertain scope differences require review rather than overwrite.
 The user must not have to transfer review packets, author JSON or execute a
 second command. The JSON files are an internal interface for this assistant.
 The standalone selector uses the Codex CLI reviewer automatically; assistant mode
-avoids starting another AI process when the current chat is performing the review.
+avoids starting a separate Codex CLI process when ChatGPT in the current chat is performing the review.
 
 Tests: `python -m pytest tests -q`. An offline run does not validate live APIs or
 company websites. Do not launch live model reviews as a substitute for unit tests.

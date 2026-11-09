@@ -17,7 +17,7 @@ if not exist ".env" copy /y ".env.example" ".env" >nul
 echo.
 echo Python 패키지 준비가 끝났습니다.
 echo README.md의 처음 설정 안내에 따라 .env에 DART 키를 저장하세요.
-echo AI는 본인 계정으로 로그인하고 이 폴더를 로컬 프로젝트로 등록하세요.
+echo ChatGPT는 본인 계정으로 로그인하고 이 폴더를 로컬 프로젝트로 등록하세요.
 echo 분기 선택 화면을 이용하려면 Codex CLI 설치와 로그인도 필요합니다.
 pause
 exit /b 0
