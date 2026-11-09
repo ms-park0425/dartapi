@@ -9,3 +9,4 @@ quarterly.local.json
 *.tmp.xlsx
 _to_delete/
 ~$*.xlsx
+data/

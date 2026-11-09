@@ -1,6 +1,11 @@
 # Quarterly insurance data workflow
 
-Read `README.md` for the operator workflow and handoff setup. This repository is
+Read `README.md` for the operator workflow and handoff setup.
+The recipient is a nontechnical business operator. Do setup, commands and review
+interfaces yourself; explain required user actions in plain Korean. CLI commands
+and developer maintenance belong in docs/개발_운영참고.md, not in the operator guide.
+The 2026 workbook entries were entered previously and are not validated answers.
+Use the designated 2025 reference only for frozen reconstruction scoring. This repository is
 portable between users: do not rely on the prior chat or another user's absolute
 paths. Prefer the workbook supplied in the current request; otherwise use merged
 default/local settings through `quarter_pipeline.read_config`.

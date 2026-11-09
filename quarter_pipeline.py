@@ -33,7 +33,7 @@ def main(argv=None):
     parser.add_argument("--check-baseline", action="store_true", help="2512backup 정답본과 과거 값을 읽기 전용 대조")
     parser.add_argument("--reviewer", choices=["codex", "assistant"], default="codex")
     parser.add_argument("--resume", type=Path, help="동일 실행의 PDF 검토 재개")
-    parser.add_argument("--finalize", type=Path, help="현재 대화 AI가 작성한 검토 결과 반영")
+    parser.add_argument("--finalize", type=Path, help="현재 Codex 채팅에서 작성한 검토 결과 반영")
     args = parser.parse_args(argv)
     from dotenv import load_dotenv
     load_dotenv(ROOT / ".env")
@@ -70,7 +70,7 @@ def main(argv=None):
         run = prepare(ROOT, period, config, offline=args.offline, company_filter=args.companies)
         print(f"실행 폴더: {run}")
         if args.reviewer == "assistant":
-            print("상태: PDF 직접 검토 대기. 현재 대화의 AI가 검토·반영까지 이어서 수행해야 합니다.")
+            print("상태: PDF 직접 검토 대기. 현재 Codex 채팅에서 PDF 검토·반영까지 이어서 수행해야 합니다.")
             return 0
         review_run(run, reviewer)
         return 0
