@@ -48,7 +48,7 @@ def export(output,workbook=None):
         archive.writestr('Dartapi/quarterly.json',json.dumps(packed_config,ensure_ascii=False,indent=2))
         archive.writestr('Dartapi/HANDOFF_MANIFEST.json',json.dumps(dict(
             files=hashes,excluded=['.env','quarterly.local.json','.venv','.git','runs','data','login credentials'],
-            setup='README.md → 처음설정.cmd → 담당자 본인의 DART 키·ChatGPT 로그인·작업 파일 설정'),ensure_ascii=False,indent=2))
+            setup='README.md → Codex에서 폴더 열기 → 채팅으로 실행 환경 준비 → 담당자 본인의 DART 키·작업 파일 설정'),ensure_ascii=False,indent=2))
     return output
 
 

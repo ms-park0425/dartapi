@@ -9,6 +9,16 @@ Interpret a project-chat request such as "202609 분기보고서 채워줘" as
 2026 Q3 and pass the internal YYMM period `2609` to the program. Do not pass
 the six-digit conversational date directly to the CLI.
 
+For initial setup in Codex, inspect the existing project environment and available
+Python runtimes (including a runtime exposed by the current app's tools) before
+asking the user to install Python. Verify Python >=3.10. If needed, create the
+project .venv with the discovered interpreter and install requirements.txt.
+Do not assume every recipient has a bundled runtime or reuse another PC's path.
+Only advise a separate Python installation when no usable runtime is available.
+Treat 처음설정.cmd as an optional manual helper, not a prerequisite for local chats.
+Check DART key presence without displaying it; prepare .env from .env.example
+only if missing and never overwrite an existing key.
+
 For requests to populate a selected quarter, complete collection, first-pass entry,
 direct PDF inspection, corrections and the final workbook in this chat.
 Use the PDF skill when inspecting pages. Preserve the user's workbook layout and
@@ -64,7 +74,7 @@ revisions and uncertain scope differences require review rather than overwrite.
 The user must not have to transfer review packets, author JSON or execute a
 second command. The JSON files are an internal interface for this assistant.
 The standalone selector uses the Codex CLI reviewer automatically; assistant mode
-avoids starting a separate Codex CLI process when ChatGPT in the current chat is performing the review.
+avoids starting a separate Codex CLI process when GPT in the current Codex chat is performing the review.
 
 Tests: `python -m pytest tests -q`. An offline run does not validate live APIs or
 company websites. Do not launch live model reviews as a substitute for unit tests.
