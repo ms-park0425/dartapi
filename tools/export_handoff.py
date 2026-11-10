@@ -14,7 +14,7 @@ FILES=['README.md','AGENTS.md','.env.example','.gitignore','.gitattributes',
        'quarter_pipeline.py','quarter_picker.py','dart_api.py','parse_annual.py',
        'ir_parse.py','ir_pdf.py','backtest_2512.py','requirements.txt','requirements-dev.txt',
        'pytest.ini','recalculate_excel.ps1','convert_legacy_factsheet.ps1','처음설정.cmd','분기입력.cmd']
-DOCS=['2506_최종점검.md','개발_운영참고.md','quarterly_workflow.png','2609_실행지침.md','quarterly_lessons.json','review_navigation_2025.json',
+DOCS=['2506_최종점검.md','개발_운영참고.md','2609_실행지침.md','quarterly_lessons.json','review_navigation_2025.json',
       'company_field_sources.json','회사별_칼럼별_출처안내.md','회사별_칼럼별_출처목록.csv',
       '2025_검증현황.md','2025_오류원인메모.md','2025_오류원인메모.csv',
       '2025_company_field_status.csv','2512_불일치_빈칸_분석.csv']
