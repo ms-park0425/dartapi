@@ -6,16 +6,7 @@
 
 ## 한눈에 보는 흐름
 
-```mermaid
-%%{init: {"theme":"base","themeVariables":{"fontFamily":"Malgun Gothic, sans-serif","fontSize":"13px","primaryColor":"#f8f9fa","primaryTextColor":"#333333","primaryBorderColor":"#b8bec6","lineColor":"#8c939d"},"flowchart":{"htmlLabels":true,"nodeSpacing":16,"rankSpacing":22,"padding":10,"curve":"linear"}}}%%
-flowchart LR
-    A["담당자 요청<br/>분기·작업 Excel 지정"] --> B["자료 수집<br/>DART·공식 IR"]
-    B --> C["코드 1차 입력<br/>숫자 추출·Excel 입력"]
-    C --> D["GPT 2차 검토<br/>PDF 확인·보충·보정"]
-    D --> E["결과 확인<br/>검산 후 최종 Excel 전달"]
-```
-
-GPT는 회사별 출처 힌트와 과거 오류 메모를 참고합니다. 확인되지 않은 값은 보류 항목으로 안내합니다.
+<img src="docs/quarterly_workflow.png" alt="담당자 요청, 자료 수집, 코드 1차 입력, GPT PDF 검토, 최종 저장과 확인 순서" width="840">
 
 ## 처음 받았다면: 한 번만 준비
 
