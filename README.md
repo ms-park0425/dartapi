@@ -6,7 +6,7 @@
 
 ## 한눈에 보는 흐름
 
-<img src="docs/quarterly_workflow.png" alt="담당자 요청, 자료 수집, 코드 1차 입력, GPT PDF 검토, 최종 저장과 확인 순서" width="840">
+<img src="docs/quarterly_workflow.png" alt="담당자 요청과 결과 확인 사이에 Codex가 자동 진행하는 자료 수집·코드 입력·GPT PDF 검토·최종 저장 구간" width="840">
 
 **담당자가 분기를 요청하면, 자료 수집 → 코드 1차 입력 → GPT PDF 검토·보정 → 검산·최종 저장은 Codex가 이 채팅 안에서 이어서 진행합니다.**
 담당자는 완료 답변의 Excel을 열고 미확인·보류 항목을 확인하면 됩니다. 단계마다 프로그램을 실행하거나 중간 파일을 옮길 필요는 없습니다.

@@ -1,51 +1,52 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="1144" viewBox="0 0 1120 1144">
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="1350" viewBox="0 0 1120 1350">
 <rect width="100%" height="100%" fill="white"/>
 <g font-family="Malgun Gothic, Apple SD Gothic Neo, sans-serif">
 <text x="48" y="54" font-size="28" fill="#293849" font-weight="700">분기 공시 입력 절차</text>
-<text x="48" y="90" font-size="20" fill="#687483" font-weight="400">처음 설정을 마친 후, Codex 프로젝트 채팅에서 요청합니다.</text>
-<rect x="48" y="118" width="1024" height="154" rx="10" fill="#FBFCFD" stroke="#DCE1E7"/>
-<path d="M49 143L49 247" stroke="#71859C" stroke-width="3" fill="none"/>
-<text x="76" y="169" font-size="27" fill="#7B8796" font-weight="400">01</text>
-<text x="140" y="155" font-size="19" fill="#66768A" font-weight="400">담당자 요청</text>
-<text x="140" y="194" font-size="27" fill="#273747" font-weight="700">Codex 채팅에서 분기와 작업 Excel 지정</text>
-<text x="140" y="241" font-size="24" fill="#334D6D" font-weight="400">“202609 분기보고서 채워줘”</text>
-<path d="M560 279L560 294" stroke="#B4BDC8" stroke-width="2" fill="none"/>
-<path d="M554 289L560 295" stroke="#B4BDC8" stroke-width="2" fill="none"/>
-<path d="M566 289L560 295" stroke="#B4BDC8" stroke-width="2" fill="none"/>
-<rect x="48" y="302" width="1024" height="154" rx="10" fill="#FBFCFD" stroke="#DCE1E7"/>
-<path d="M49 327L49 431" stroke="#71859C" stroke-width="3" fill="none"/>
-<text x="76" y="353" font-size="27" fill="#7B8796" font-weight="400">02</text>
-<text x="140" y="339" font-size="19" fill="#66768A" font-weight="400">자료 수집</text>
-<text x="140" y="378" font-size="27" fill="#273747" font-weight="700">해당 분기의 공시·IR 자료 수집</text>
-<text x="140" y="422" font-size="21" fill="#586372" font-weight="400">DART와 회사 공식 자료에서 보고서·PDF를 모읍니다.</text>
-<path d="M560 463L560 478" stroke="#B4BDC8" stroke-width="2" fill="none"/>
-<path d="M554 473L560 479" stroke="#B4BDC8" stroke-width="2" fill="none"/>
-<path d="M566 473L560 479" stroke="#B4BDC8" stroke-width="2" fill="none"/>
-<rect x="48" y="486" width="1024" height="154" rx="10" fill="#FBFCFD" stroke="#DCE1E7"/>
-<path d="M49 511L49 615" stroke="#71859C" stroke-width="3" fill="none"/>
-<text x="76" y="537" font-size="27" fill="#7B8796" font-weight="400">03</text>
-<text x="140" y="523" font-size="19" fill="#66768A" font-weight="400">코드 · 1차 입력</text>
-<text x="140" y="562" font-size="27" fill="#273747" font-weight="700">공시에서 숫자를 추출해 Excel 입력</text>
-<text x="140" y="606" font-size="21" fill="#586372" font-weight="400">단위와 기간을 맞춰 1차 결과를 저장합니다.</text>
-<path d="M560 647L560 662" stroke="#B4BDC8" stroke-width="2" fill="none"/>
-<path d="M554 657L560 663" stroke="#B4BDC8" stroke-width="2" fill="none"/>
-<path d="M566 657L560 663" stroke="#B4BDC8" stroke-width="2" fill="none"/>
-<rect x="48" y="670" width="1024" height="154" rx="10" fill="#FBFCFD" stroke="#DCE1E7"/>
-<path d="M49 695L49 799" stroke="#71859C" stroke-width="3" fill="none"/>
-<text x="76" y="721" font-size="27" fill="#7B8796" font-weight="400">04</text>
-<text x="140" y="707" font-size="19" fill="#66768A" font-weight="400">GPT · 2차 검토</text>
-<text x="140" y="746" font-size="27" fill="#273747" font-weight="700">PDF를 직접 보고 빈칸·기존 값 검토</text>
-<text x="140" y="790" font-size="21" fill="#586372" font-weight="400">회사별 출처 힌트를 참고해 확인된 값을 보충·보정합니다.</text>
-<path d="M560 831L560 846" stroke="#B4BDC8" stroke-width="2" fill="none"/>
-<path d="M554 841L560 847" stroke="#B4BDC8" stroke-width="2" fill="none"/>
-<path d="M566 841L560 847" stroke="#B4BDC8" stroke-width="2" fill="none"/>
-<rect x="48" y="854" width="1024" height="154" rx="10" fill="#FBFCFD" stroke="#DCE1E7"/>
-<path d="M49 879L49 983" stroke="#71859C" stroke-width="3" fill="none"/>
-<text x="76" y="905" font-size="27" fill="#7B8796" font-weight="400">05</text>
-<text x="140" y="891" font-size="19" fill="#66768A" font-weight="400">최종 저장 · 담당자 확인</text>
-<text x="140" y="930" font-size="27" fill="#273747" font-weight="700">검산 후 최종 Excel과 확인 사항 전달</text>
-<text x="140" y="974" font-size="21" fill="#586372" font-weight="400">결과 링크를 열고 미확인·보류 항목을 확인합니다.</text>
-<path d="M48 1067L1072 1067" stroke="#E1E5EB" stroke-width="1" fill="none"/>
-<text x="48" y="1110" font-size="20" fill="#667383" font-weight="400">과거 데이터·수식 보존   ·   같은 항목의 정밀값 유지   ·   미확인 값은 보류</text>
+<text x="48" y="89" font-size="20" fill="#667383" font-weight="400">최초 설정을 마친 뒤, Codex 프로젝트 채팅에서 분기를 요청합니다.</text>
+<rect x="60" y="116" width="1000" height="132" rx="10" fill="#FBFCFD" stroke="#C9D3DF" stroke-width="1"/>
+<text x="82" y="161" font-size="27" fill="#6D7E92" font-weight="400">01</text>
+<text x="146" y="147" font-size="19" fill="#5C7089" font-weight="400">담당자 요청</text>
+<text x="146" y="184" font-size="27" fill="#26384C" font-weight="700">분기와 작업 Excel 지정</text>
+<text x="146" y="224" font-size="22" fill="#42556C" font-weight="400">“202609 분기보고서 채워줘”</text>
+<path d="M560 258V281" stroke="#4B627C" stroke-width="4" fill="none"/>
+<path d="M551 277L560 291L569 277Z" fill="#4B627C"/>
+<rect x="36" y="308" width="1048" height="770" rx="14" fill="#F0F4F9" stroke="#A9B9CC" stroke-width="2"/>
+<text x="62" y="351" font-size="26" fill="#2E4866" font-weight="700">Codex 자동 진행 구간</text>
+<text x="62" y="382" font-size="20" fill="#4F657E" font-weight="400">아래 네 단계는 Codex가 같은 채팅 안에서 이어서 수행합니다.</text>
+<rect x="60" y="405" width="1000" height="132" rx="10" fill="#FFFFFF" stroke="#C9D3DF" stroke-width="1"/>
+<text x="82" y="450" font-size="27" fill="#6D7E92" font-weight="400">02</text>
+<text x="146" y="436" font-size="19" fill="#5C7089" font-weight="400">자료 수집</text>
+<text x="146" y="473" font-size="27" fill="#26384C" font-weight="700">해당 분기의 공시·IR 자료 수집</text>
+<text x="146" y="513" font-size="22" fill="#42556C" font-weight="400">DART와 회사 공식 자료에서 보고서·PDF를 모읍니다.</text>
+<path d="M560 546V556" stroke="#4B627C" stroke-width="4" fill="none"/>
+<path d="M551 552L560 566L569 552Z" fill="#4B627C"/>
+<rect x="60" y="576" width="1000" height="132" rx="10" fill="#FFFFFF" stroke="#C9D3DF" stroke-width="1"/>
+<text x="82" y="621" font-size="27" fill="#6D7E92" font-weight="400">03</text>
+<text x="146" y="607" font-size="19" fill="#5C7089" font-weight="400">코드 · 1차 입력</text>
+<text x="146" y="644" font-size="27" fill="#26384C" font-weight="700">공시에서 숫자를 추출해 Excel 입력</text>
+<text x="146" y="684" font-size="22" fill="#42556C" font-weight="400">단위와 기간을 맞춰 1차 결과를 저장합니다.</text>
+<path d="M560 717V727" stroke="#4B627C" stroke-width="4" fill="none"/>
+<path d="M551 723L560 737L569 723Z" fill="#4B627C"/>
+<rect x="60" y="747" width="1000" height="132" rx="10" fill="#FFFFFF" stroke="#C9D3DF" stroke-width="1"/>
+<text x="82" y="792" font-size="27" fill="#6D7E92" font-weight="400">04</text>
+<text x="146" y="778" font-size="19" fill="#5C7089" font-weight="400">GPT · 2차 검토</text>
+<text x="146" y="815" font-size="27" fill="#26384C" font-weight="700">PDF를 직접 보고 빈칸·기존 값 검토</text>
+<text x="146" y="855" font-size="22" fill="#42556C" font-weight="400">회사별 출처 힌트를 참고해 확인된 값을 보충·보정합니다.</text>
+<path d="M560 888V898" stroke="#4B627C" stroke-width="4" fill="none"/>
+<path d="M551 894L560 908L569 894Z" fill="#4B627C"/>
+<rect x="60" y="918" width="1000" height="132" rx="10" fill="#FFFFFF" stroke="#C9D3DF" stroke-width="1"/>
+<text x="82" y="963" font-size="27" fill="#6D7E92" font-weight="400">05</text>
+<text x="146" y="949" font-size="19" fill="#5C7089" font-weight="400">검산 · 최종 저장</text>
+<text x="146" y="986" font-size="27" fill="#26384C" font-weight="700">과거 데이터·수식을 확인하고 결과 저장</text>
+<text x="146" y="1026" font-size="22" fill="#42556C" font-weight="400">최종 Excel 링크와 미확인·보류 항목을 전달합니다.</text>
+<path d="M560 1090V1113" stroke="#4B627C" stroke-width="4" fill="none"/>
+<path d="M551 1109L560 1123L569 1109Z" fill="#4B627C"/>
+<rect x="60" y="1138" width="1000" height="132" rx="10" fill="#FBFCFD" stroke="#C9D3DF" stroke-width="1"/>
+<text x="82" y="1183" font-size="27" fill="#6D7E92" font-weight="400">06</text>
+<text x="146" y="1169" font-size="19" fill="#5C7089" font-weight="400">담당자 확인</text>
+<text x="146" y="1206" font-size="27" fill="#26384C" font-weight="700">최종 Excel과 남은 확인 사항 검토</text>
+<text x="146" y="1246" font-size="22" fill="#42556C" font-weight="400">결과 링크를 열고 요청한 분기와 보류 항목을 확인합니다.</text>
+<path d="M48 1302H1072" stroke="#DCE2EA"/>
+<text x="48" y="1332" font-size="20" fill="#5D6E82" font-weight="400">과거 데이터·수식 보존   ·   같은 항목의 정밀값 유지   ·   미확인 값은 보류</text>
 </g>
 </svg>
